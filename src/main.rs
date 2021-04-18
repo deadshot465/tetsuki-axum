@@ -1,4 +1,6 @@
-use crate::controller::{config_credit_controller, config_dialog_controller, login};
+use crate::controller::{
+    config_credit_controller, config_dialog_controller, config_minigame_controller, login,
+};
 use crate::db::initialize_db;
 use crate::middleware::Authentication;
 use actix_web::{App, HttpServer};
@@ -21,6 +23,7 @@ async fn main() -> std::io::Result<()> {
             .data(pool.clone())
             .configure(config_credit_controller)
             .configure(config_dialog_controller)
+            .configure(config_minigame_controller)
             .service(login)
             .service(actix_files::Files::new("/asset/dialog", "./asset/dialog"))
     })
