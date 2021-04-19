@@ -1,7 +1,8 @@
+use crate::model::MinigameRequestUser;
 use crate::shared::create_new_followup_url;
 
 pub async fn start_tictactoe(
-    user_id: u64,
+    user: MinigameRequestUser,
     channel_id: u64,
     application_id: u64,
     interaction_token: String,
