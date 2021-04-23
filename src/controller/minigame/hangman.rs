@@ -1,5 +1,9 @@
-use crate::model::{EmbedObject, MinigameRequestUser, TORAHIKO_COLOR};
+use crate::model::{
+    EmbedObject, HangmanData, MinigameProgressRequest, MinigameProgressResponse,
+    MinigameRequestUser, MinigameStatus, TORAHIKO_COLOR,
+};
 use crate::shared::create_new_followup_url;
+use actix_web::{post, HttpResponse, Responder};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use futures::{StreamExt, TryStreamExt};
@@ -13,7 +17,7 @@ const HANGMAN_THUMBNAIL: &str =
     "https://cdn.discordapp.com/attachments/700003813981028433/736202279983513671/unnamed.png";
 
 static WORDS: OnceCell<Vec<String>> = OnceCell::new();
-static ONGOING_GAMES: OnceCell<Arc<DashMap<u64, Vec<(MinigameRequestUser, DateTime<Utc>)>>>> =
+static ONGOING_GAMES: OnceCell<Arc<DashMap<u64, Vec<(MinigameRequestUser, HangmanData)>>>> =
     OnceCell::new();
 
 pub async fn start_hangman(
@@ -80,11 +84,86 @@ pub async fn start_hangman(
         .send_json(&followup_message)
         .await
         .expect("Failed to send followup URL request.");
+
+    actix_web::rt::time::sleep(Duration::from_secs(1)).await;
+    let mut followup_message = std::collections::HashMap::new();
+    followup_message.insert("content", "Input a letter: ");
+    client
+        .post(&followup_url)
+        .send_json(&followup_message)
+        .await
+        .expect("Failed to send followup URL request.");
+
     {
         let ongoing_games = ONGOING_GAMES.get_or_init(|| Arc::new(DashMap::new()));
         let mut channel = ongoing_games.entry(channel_id).or_insert_with(Vec::new);
-        channel.push((user, Utc::now()));
+        channel.push((
+            user,
+            HangmanData {
+                attempts: 0,
+                previous_guesses: vec![],
+                word,
+                last_reply_time: Utc::now(),
+            },
+        ));
     }
 
     Ok(())
+}
+
+#[post("/minigame/progress")]
+pub async fn handle_hangman(
+    request_data: actix_web::web::Json<MinigameProgressRequest>,
+) -> impl Responder {
+    let ongoing_games = ONGOING_GAMES.get_or_init(|| Arc::new(DashMap::new()));
+    let actix_web::web::Json(data) = request_data;
+    match data {
+        MinigameProgressRequest::Hangman {
+            user_id,
+            message,
+            channel_id,
+            guild_id,
+            message_id,
+        } => {
+            let mut game_stale = false;
+            if let Some(gaming_members) = ongoing_games.get(&channel_id) {
+                if let Some((_, data)) = gaming_members.iter().find(|(m, _)| m.user_id == user_id) {
+                    if (Utc::now() - data.last_reply_time.clone()).num_seconds() > 60 {
+                        game_stale = true;
+                    }
+                }
+            }
+
+            if game_stale {
+                if let Some(mut gaming_members) = ongoing_games.get_mut(&channel_id) {
+                    gaming_members.retain(|(m, _)| m.user_id != user_id);
+                }
+                HttpResponse::Ok().json(MinigameProgressResponse {
+                    status: MinigameStatus::Stale,
+                })
+            } else {
+                progress_hangman(user_id, message, channel_id, guild_id, message_id).await
+            }
+        }
+        _ => HttpResponse::BadRequest().finish(),
+    }
+}
+
+async fn progress_hangman(
+    user_id: u64,
+    message: String,
+    channel_id: u64,
+    guild_id: u64,
+    message_id: u64,
+) -> HttpResponse {
+    let ongoing_games = ONGOING_GAMES.get_or_init(|| Arc::new(DashMap::new()));
+    let mut gaming_members = ongoing_games
+        .get_mut(&channel_id)
+        .expect("Failed to get gaming members in the channel.");
+    let (member, data) = gaming_members
+        .iter_mut()
+        .find(|(m, _)| m.user_id == user_id)
+        .expect("Failed to get the member to process among existing members.");
+
+    HttpResponse::Ok().finish()
 }
