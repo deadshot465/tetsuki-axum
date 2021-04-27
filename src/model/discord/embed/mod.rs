@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 pub const TORAHIKO_COLOR: u32 = 0xdfd16c;
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct EmbedObject {
     pub title: Option<String>,
     #[serde(rename = "type")]
@@ -19,21 +19,21 @@ pub struct EmbedObject {
     pub fields: Option<Vec<EmbedField>>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct EmbedFooter {
     pub text: String,
     pub icon_url: Option<String>,
     pub proxy_icon_url: Option<String>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct EmbedField {
     pub name: String,
     pub value: String,
     pub inline: Option<bool>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct EmbedImage {
     pub url: Option<String>,
     pub proxy_url: Option<String>,
@@ -41,7 +41,7 @@ pub struct EmbedImage {
     pub width: Option<u32>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct EmbedThumbnail {
     pub url: Option<String>,
     pub proxy_url: Option<String>,
@@ -49,7 +49,7 @@ pub struct EmbedThumbnail {
     pub width: Option<u32>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct EmbedVideo {
     pub url: Option<String>,
     pub proxy_url: Option<String>,
@@ -57,13 +57,13 @@ pub struct EmbedVideo {
     pub width: Option<u32>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct EmbedProvider {
     pub name: Option<String>,
     pub url: Option<String>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct EmbedAuthor {
     pub name: Option<String>,
     pub url: Option<String>,

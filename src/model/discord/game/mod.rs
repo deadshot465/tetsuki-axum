@@ -1,3 +1,4 @@
+use crate::model::EmbedObject;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -74,4 +75,6 @@ pub struct HangmanData {
     pub previous_guesses: Vec<String>,
     pub word: String,
     pub last_reply_time: DateTime<Utc>,
+    pub original_embed: EmbedObject,
+    pub original_embed_id: String,
 }
