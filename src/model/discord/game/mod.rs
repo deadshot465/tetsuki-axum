@@ -1,4 +1,4 @@
-use crate::model::EmbedObject;
+use crate::model::{EmbedObject, MessageReference};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -32,10 +32,11 @@ pub struct MinigameRequestUser {
     pub avatar_url: String,
 }
 
-#[derive(Deserialize, Serialize, Debug, Copy, Clone)]
+#[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub enum MinigameStatus {
     InProgress,
     Stale,
+    End,
 }
 
 #[derive(Deserialize, Serialize, Debug, Copy, Clone)]
@@ -77,4 +78,5 @@ pub struct HangmanData {
     pub last_reply_time: DateTime<Utc>,
     pub original_embed: EmbedObject,
     pub original_embed_id: String,
+    pub followup_url: String,
 }

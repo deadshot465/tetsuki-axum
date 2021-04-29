@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-const MAX_ATTEMPTS: i32 = 10;
+const MAX_ATTEMPTS: u8 = 10;
 const HANGMAN_THUMBNAIL: &str =
     "https://cdn.discordapp.com/attachments/700003813981028433/736202279983513671/unnamed.png";
 
@@ -105,12 +105,13 @@ pub async fn start_hangman(
         channel.push((
             user,
             Mutex::new(HangmanData {
-                attempts: 0,
+                attempts: MAX_ATTEMPTS,
                 previous_guesses: vec![],
                 word,
                 last_reply_time: Utc::now(),
                 original_embed: embed_object,
                 original_embed_id,
+                followup_url,
             }),
         ));
     }
@@ -229,17 +230,116 @@ async fn progress_hangman(
             return Ok(HttpResponse::Ok().finish());
         }
 
+        let mut game_clear = false;
+        let mut game_over = false;
+        let mut word = String::new();
+        let mut followup_url = String::new();
+        let mut member_id = 0;
         {
             let mut data_lock = data.lock().expect("Failed to lock user's hangman data.");
+            let char_string = char.to_ascii_uppercase().to_string();
             // Add the letter to the existing guesses and deduplicate.
-            data_lock
-                .previous_guesses
-                .push(char.to_ascii_uppercase().to_string());
+            data_lock.previous_guesses.push(char_string.clone());
             data_lock.previous_guesses.dedup();
+            let previous_guesses: String = data_lock
+                .previous_guesses
+                .iter()
+                .map(|c| format!("'{}'", c))
+                .collect::<Vec<_>>()
+                .join(", ");
+
             // Update last reply time.
             data_lock.last_reply_time = Utc::now();
+
+            // Update hangman embed's title to show corrected guesses.
+            let mut title: String = data_lock
+                .word
+                .clone()
+                .chars()
+                .map(|c| {
+                    let c_string = c.to_string();
+                    if data_lock.previous_guesses.contains(&c_string) {
+                        c_string
+                    } else {
+                        "\\_".to_string()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(" ");
+
+            // Check the answer and deduct remaining attempts if the answer is incorrect.
+            if !data_lock.word.contains(&char_string) {
+                data_lock.attempts -= 1;
+            }
+
+            // End the game if all letters have been correctly guessed.
+            game_clear = !title.contains("_");
+
+            // End the game if there are no attempts remained.
+            game_over = data_lock.attempts == 0;
+
+            // Edit the embed
+            data_lock.original_embed.title = Some(title);
+            data_lock.original_embed.description = Some(format!(
+                "You have {} attempts left.\n{}",
+                data_lock.attempts, &previous_guesses
+            ));
+            let edit_url = (BASE_URL.to_string() + EDIT_DELETE_MESSAGE_ENDPOINT)
+                .replace("{channel_id}", &channel_id.to_string())
+                .replace("{message_id}", &data_lock.original_embed_id);
+
+            let mut request_data = HashMap::new();
+            request_data.insert("embed", data_lock.original_embed.clone());
+
+            client
+                .patch(&edit_url)
+                .append_header(("Authorization", format!("Bot {}", &bot_token)))
+                .append_header(JSON_HEADER.clone())
+                .send_json(&request_data)
+                .await
+                .expect("Failed to edit the original embed.");
+
+            // Clone the word, followup url and member id for message to use.
+            word = data_lock.word.clone();
+            followup_url = data_lock.followup_url.clone();
+            member_id = member.user_id;
+        }
+
+        drop(gaming_members);
+        if game_clear || game_over {
+            if let Some(mut gaming_members) = ongoing_games.get_mut(&channel_id) {
+                gaming_members.retain(|(m, _)| m.user_id != user_id);
+            }
+
+            // Post successful/unsuccessful message.
+            let mut request_data = HashMap::new();
+            request_data.insert(
+                "content",
+                if game_clear {
+                    format!(
+                        "<@!{}> You got the correct answer!\nThe answer is {}.",
+                        member_id, &word
+                    )
+                } else {
+                    format!("<@!{}> You lose!\nThe answer is {}.", member_id, &word)
+                },
+            );
+            let create_url = (BASE_URL.to_string() + CREATE_MESSAGE_ENDPOINT)
+                .replace("{channel_id}", &channel_id.to_string());
+            client
+                .post(&create_url)
+                .append_header(("Authorization", format!("Bot {}", &bot_token)))
+                .append_header(JSON_HEADER.clone())
+                .send_json(&request_data)
+                .await
+                .expect("Failed to send successful/unsuccessful message.");
+            return Ok(HttpResponse::Ok().json(MinigameProgressResponse {
+                status: MinigameStatus::End,
+            }));
         }
     }
 
-    Ok(HttpResponse::Ok().finish())
+    Ok(HttpResponse::Ok().json(MinigameProgressResponse {
+        status: MinigameStatus::InProgress,
+    }))
 }

@@ -1,5 +1,6 @@
 use crate::controller::{
-    config_credit_controller, config_dialog_controller, config_minigame_controller, login,
+    config_credit_controller, config_dialog_controller, config_minigame_controller, handle_hangman,
+    login,
 };
 use crate::db::initialize_db;
 use crate::middleware::Authentication;
@@ -25,6 +26,7 @@ async fn main() -> std::io::Result<()> {
             .configure(config_dialog_controller)
             .configure(config_minigame_controller)
             .service(login)
+            .service(handle_hangman)
             .service(actix_files::Files::new("/asset/dialog", "./asset/dialog"))
     })
     .bind("0.0.0.0:8080")?
