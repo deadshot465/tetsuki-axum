@@ -1,6 +1,5 @@
 use crate::shared::get_dialog;
-use actix_web::body::Body::Bytes;
-use actix_web::web::ServiceConfig;
+use actix_web::web::{Bytes, ServiceConfig};
 use actix_web::{get, HttpResponse, Responder};
 
 pub fn config_dialog_controller(cfg: &mut ServiceConfig) {

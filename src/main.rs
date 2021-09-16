@@ -1,9 +1,9 @@
-use crate::controller::{
-    config_credit_controller, config_dialog_controller, config_minigame_controller, handle_hangman,
-    login,
-};
+use crate::controller::credit_controller::config_credit_controller;
+use crate::controller::dialog_controller::config_dialog_controller;
+use crate::controller::login_controller::login;
+use crate::controller::minigame::hangman::handle_hangman;
 use crate::db::initialize_db;
-use crate::middleware::Authentication;
+use crate::middleware::authentication::Authentication;
 use actix_web::{App, HttpServer};
 
 mod controller;
@@ -21,7 +21,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .wrap(Authentication)
-            .data(pool.clone())
+            .app_data(pool.clone())
             .configure(config_credit_controller)
             .configure(config_dialog_controller)
             .configure(config_minigame_controller)

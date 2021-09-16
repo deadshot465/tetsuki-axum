@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-pub const TORAHIKO_COLOR: u32 = 0xdfd16c;
-
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct EmbedObject {
     pub title: Option<String>,

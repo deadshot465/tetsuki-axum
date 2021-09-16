@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-mod embed;
-mod game;
-pub use embed::*;
-pub use game::*;
+pub mod embed;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Message {
