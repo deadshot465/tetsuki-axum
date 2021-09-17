@@ -1,4 +1,5 @@
-use crate::model::{Claim, LoginCredential, LoginResponse};
+use crate::model::claim::Claim;
+use crate::model::login_info::{LoginCredential, LoginResponse};
 use actix_web::{post, HttpResponse, Responder};
 use chrono::{Duration, SecondsFormat, Utc};
 use jsonwebtoken::{encode, EncodingKey, Header};
