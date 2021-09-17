@@ -1,4 +1,4 @@
-use crate::model::{UserCredit, UserCreditUpdateInfo};
+use crate::model::user_credit::{UserCredit, UserCreditUpdateInfo};
 use actix_web::web::{Data, Path, ServiceConfig};
 use actix_web::{get, patch, post, HttpResponse, Responder};
 use sqlx::{Pool, Postgres};

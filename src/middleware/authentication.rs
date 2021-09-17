@@ -1,4 +1,4 @@
-use crate::model::Claim;
+use crate::model::claim::Claim;
 use actix_service::{Service, Transform};
 use actix_web::dev::{ServiceRequest, ServiceResponse};
 use actix_web::{Error, HttpResponse};
