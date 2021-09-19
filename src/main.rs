@@ -26,7 +26,7 @@ async fn main() -> std::io::Result<()> {
             .service(login)
             .service(actix_files::Files::new("/asset/dialog", "./asset/dialog"))
     })
-    .bind("0.0.0.0:8080")?
+    .bind("0.0.0.0:80")?
     .run()
     .await?;
     Ok(())

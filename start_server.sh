@@ -1,5 +1,5 @@
 #!/bin/bash
-sudo rm /etc/systemd/system/chrome-driver.service
+rm /etc/systemd/system/chrome-driver.service
 
 cat > /etc/systemd/system/chrome-driver.service <<- EOF
 [Unit]

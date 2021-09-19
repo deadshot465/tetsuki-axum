@@ -2,8 +2,11 @@ FROM rust:1.55 as builder
 WORKDIR /src
 COPY . .
 RUN cargo build --release
-COPY ./asset ./target/release/asset/
+COPY ./asset/ ./target/release/asset/
 COPY ./start_server.sh ./target/release/start_server.sh
+WORKDIR /src/target/release
+RUN rm -rf ./build && rm -rf ./deps && rm -rf ./examples
+WORKDIR /src
 
 FROM debian:buster-slim
 WORKDIR /root
