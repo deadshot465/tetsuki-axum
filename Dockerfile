@@ -15,9 +15,9 @@ RUN curl -sS -o - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-ke
     apt-get -y install google-chrome-stable
 RUN wget https://chromedriver.storage.googleapis.com/93.0.4577.63/chromedriver_linux64.zip && \
     unzip chromedriver_linux64.zip && \
-    sudo mv chromedriver /usr/bin/chromedriver && \
-    sudo chown root:root /usr/bin/chromedriver && \
-    sudo chmod +x /usr/bin/chromedriver \
+    mv chromedriver /usr/bin/chromedriver && \
+    chown root:root /usr/bin/chromedriver && \
+    chmod +x /usr/bin/chromedriver \
 RUN rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
