@@ -17,5 +17,5 @@ User=root
 WantedBy=multi-user.target
 EOF
 
-nohup chromedriver &>/dev/null &
+nohup chromedriver --port=65535 &>/dev/null &
 ./tetsuki-actix
