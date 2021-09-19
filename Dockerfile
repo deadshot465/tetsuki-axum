@@ -8,7 +8,7 @@ COPY ./start_server.sh ./target/release/start_server.sh
 FROM debian:buster-slim
 WORKDIR /root
 RUN apt-get update && \
-    apt-get install -y apt-transport-https wget curl
+    apt-get install -y apt-transport-https wget curl gnupg
 RUN curl -sS -o - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add && \
     echo "deb [arch=amd64]  http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list && \
     apt-get -y update && \
