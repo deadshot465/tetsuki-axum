@@ -14,7 +14,9 @@ mod shared;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    dotenv::dotenv().expect("Failed to load .env into environment variables.");
+    if let Err(e) = dotenv::dotenv() {
+        log::error!(".env file not found.");
+    }
 
     let pool = initialize_db()
         .await
