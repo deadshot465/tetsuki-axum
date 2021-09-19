@@ -2,11 +2,26 @@ FROM rust:1.55 as builder
 WORKDIR /src
 COPY . .
 RUN cargo build --release
-COPY "./asset" "./target/release"
+COPY ./asset ./target/release/asset/
+COPY ./start_server.sh ./target/release/start_server.sh
 
 FROM debian:buster-slim
-RUN apt-get update && apt-get install -y extra-runtime-dependencies wget && rm -rf /var/lib/apt/lists/*
+WORKDIR /root
+RUN apt-get update && \
+    apt-get install -y extra-runtime-dependencies wget curl && \
+    rm -rf /var/lib/apt/lists/*
+RUN curl -sS -o - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add && \
+    echo "deb [arch=amd64]  http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list && \
+    apt-get -y update && \
+    apt-get -y install google-chrome-stable
+RUN wget https://chromedriver.storage.googleapis.com/93.0.4577.63/chromedriver_linux64.zip && \
+    unzip chromedriver_linux64.zip && \
+    sudo mv chromedriver /usr/bin/chromedriver && \
+    sudo chown root:root /usr/bin/chromedriver && \
+    sudo chmod +x /usr/bin/chromedriver
+
 WORKDIR /app
 COPY --from=builder /src/target/release .
+RUN ["chmod", "+x", "/app/start_server.sh"]
 
-ENTRYPOINT [ "tetsuki-actix" ]
+ENTRYPOINT [ "/app/start_server.sh" ]
