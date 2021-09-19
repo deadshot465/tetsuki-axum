@@ -37,7 +37,7 @@ async fn get_single_user_credits(user_id: Path<i32>, data: Data<Pool<Postgres>>)
 }
 
 #[post("/credit")]
-pub async fn add_user(
+async fn add_user(
     request: actix_web::web::Json<UserCredit>,
     data: Data<Pool<Postgres>>,
 ) -> impl Responder {
@@ -61,7 +61,7 @@ pub async fn add_user(
 }
 
 #[patch("/credit/{user_id}/plus")]
-pub async fn add_credit(
+async fn add_credit(
     user_id: Path<String>,
     request: actix_web::web::Json<UserCreditUpdateInfo>,
     data: Data<Pool<Postgres>>,
@@ -77,7 +77,7 @@ pub async fn add_credit(
 }
 
 #[patch("/credit/{user_id}/minus")]
-pub async fn reduce_credit(
+async fn reduce_credit(
     user_id: Path<String>,
     request: actix_web::web::Json<UserCreditUpdateInfo>,
     data: Data<Pool<Postgres>>,

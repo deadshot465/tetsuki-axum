@@ -57,7 +57,7 @@ where
         if anonymous_endpoints.iter().any(|s| path.starts_with(&*s)) {
             authentication_pass = true;
         } else if let Some(header) = req.headers().get("Authorization") {
-            let header_value = header.to_str().unwrap_or("");
+            let header_value = header.to_str().unwrap_or_default();
             if header_value.starts_with("Bearer") {
                 let token = header_value[6..].trim();
                 let secret = dotenv::var("JWT_SECRET").unwrap_or_default();
@@ -66,7 +66,7 @@ where
                     &DecodingKey::from_secret(secret.as_bytes()),
                     &Validation::default(),
                 ) {
-                    println!("{:?}", &token.claims);
+                    log::info!("{:?}", &token.claims);
                     authentication_pass = true;
                 }
             }
