@@ -17,7 +17,7 @@ RUN wget https://chromedriver.storage.googleapis.com/93.0.4577.63/chromedriver_l
     unzip chromedriver_linux64.zip && \
     mv chromedriver /usr/bin/chromedriver && \
     chown root:root /usr/bin/chromedriver && \
-    chmod +x /usr/bin/chromedriver \
+    chmod +x /usr/bin/chromedriver
 RUN rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
