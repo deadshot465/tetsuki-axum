@@ -47,6 +47,10 @@ async fn initialize() -> anyhow::Result<()> {
         let mut caps = DesiredCapabilities::chrome();
         caps.set_headless()
             .expect("Failed to set capability to headless.");
+        caps.add_chrome_arg("--no-sandbox")
+            .expect("Failed to add Chrome argument --no-sandbox.");
+        caps.add_chrome_arg("--disable-dev-shm-usage")
+            .expect("Failed to add Chrome argument --disable-dev-shm-usage.");
         caps
     });
 
