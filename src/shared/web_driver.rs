@@ -7,6 +7,7 @@ static CAPABILITIES: OnceCell<ChromeCapabilities> = OnceCell::new();
 static WEB_DRIVER: OnceCell<WebDriver> = OnceCell::new();
 
 const WEB_DRIVER_ADDRESS: &str = "http://localhost:65535";
+const DIALOG_TEMPLATE_FILE_NAME: &str = "/asset/dialog/template.html";
 
 const DIALOG_SCRIPT: &str = r#"
             document.getElementById('text').innerText = `{text}`;
@@ -19,7 +20,7 @@ pub async fn get_dialog(dialog_info: DialogInfo) -> anyhow::Result<Vec<u8>> {
     initialize().await?;
     if let Some(driver) = WEB_DRIVER.get() {
         driver
-            .get("http://localhost:8080/asset/dialog/template.html")
+            .get(String::from(WEB_DRIVER_ADDRESS) + DIALOG_TEMPLATE_FILE_NAME)
             .await?;
 
         let sanitized_text = dialog_info
