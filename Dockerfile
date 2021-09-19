@@ -26,5 +26,6 @@ RUN rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /src/target/release .
 RUN ["chmod", "+x", "/app/start_server.sh"]
+EXPOSE 80
 
 ENTRYPOINT [ "/app/start_server.sh" ]

@@ -17,6 +17,5 @@ User=root
 WantedBy=multi-user.target
 EOF
 
-systemctl daemon-reload
-systemctl start chrome-driver.service
+nohup chromedriver &>/dev/null &
 ./tetsuki-actix

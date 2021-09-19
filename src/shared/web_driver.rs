@@ -6,7 +6,7 @@ use thirtyfour::{ChromeCapabilities, OptionRect};
 static CAPABILITIES: OnceCell<ChromeCapabilities> = OnceCell::new();
 static WEB_DRIVER: OnceCell<WebDriver> = OnceCell::new();
 
-const WEB_DRIVER_ADDRESS: &str = "http://localhost:3000";
+const WEB_DRIVER_ADDRESS: &str = "http://localhost:65535";
 
 const DIALOG_SCRIPT: &str = r#"
             document.getElementById('text').innerText = `{text}`;
