@@ -1,4 +1,5 @@
 use crate::model::claim::Claim;
+use crate::shared::configuration::CONFIGURATION;
 use actix_service::{Service, Transform};
 use actix_web::dev::{ServiceRequest, ServiceResponse};
 use actix_web::{Error, HttpResponse};
@@ -60,7 +61,7 @@ where
             let header_value = header.to_str().unwrap_or_default();
             if header_value.starts_with("Bearer") {
                 let token = header_value[6..].trim();
-                let secret = dotenv::var("JWT_SECRET").unwrap_or_default();
+                let secret = &CONFIGURATION.jwt_secret;
                 if let Ok(token) = decode::<Claim>(
                     token,
                     &DecodingKey::from_secret(secret.as_bytes()),

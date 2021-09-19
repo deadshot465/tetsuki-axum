@@ -1,4 +1,5 @@
 pub mod claim;
+pub mod configuration;
 pub mod dialog_info;
 pub mod discord;
 pub mod interaction;

@@ -1,4 +1,5 @@
 use crate::model::dialog_info::DialogInfo;
+use crate::shared::configuration::CONFIGURATION;
 use once_cell::sync::OnceCell;
 use thirtyfour::prelude::*;
 use thirtyfour::{ChromeCapabilities, OptionRect};
@@ -6,7 +7,6 @@ use thirtyfour::{ChromeCapabilities, OptionRect};
 static CAPABILITIES: OnceCell<ChromeCapabilities> = OnceCell::new();
 static WEB_DRIVER: OnceCell<WebDriver> = OnceCell::new();
 
-const WEB_DRIVER_ADDRESS: &str = "http://localhost:65535";
 const DIALOG_TEMPLATE_FILE_NAME: &str = "/asset/dialog/template.html";
 
 const DIALOG_SCRIPT: &str = r#"
@@ -20,7 +20,7 @@ pub async fn get_dialog(dialog_info: DialogInfo) -> anyhow::Result<Vec<u8>> {
     initialize().await?;
     if let Some(driver) = WEB_DRIVER.get() {
         driver
-            .get(String::from(WEB_DRIVER_ADDRESS) + DIALOG_TEMPLATE_FILE_NAME)
+            .get(String::from(&CONFIGURATION.server_address) + DIALOG_TEMPLATE_FILE_NAME)
             .await?;
 
         let sanitized_text = dialog_info
@@ -56,7 +56,8 @@ async fn initialize() -> anyhow::Result<()> {
     });
 
     if WEB_DRIVER.get().is_none() {
-        let driver = WebDriver::new(WEB_DRIVER_ADDRESS, capabilities.clone()).await?;
+        let driver =
+            WebDriver::new(&CONFIGURATION.web_driver_address, capabilities.clone()).await?;
         driver
             .set_window_rect(OptionRect::new().with_size(810, 1080))
             .await?;

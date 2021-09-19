@@ -3,6 +3,7 @@ use crate::controller::dialog_controller::config_dialog_controller;
 use crate::controller::login_controller::login;
 use crate::db::initialize_db;
 use crate::middleware::authentication::Authentication;
+use crate::shared::configuration::CONFIGURATION;
 use actix_web::{App, HttpServer};
 
 mod controller;
@@ -13,6 +14,8 @@ mod shared;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    dotenv::dotenv().expect("Failed to load .env into environment variables.");
+
     let pool = initialize_db()
         .await
         .expect("Failed to initialize database connection.");
@@ -26,7 +29,7 @@ async fn main() -> std::io::Result<()> {
             .service(login)
             .service(actix_files::Files::new("/asset/dialog", "./asset/dialog"))
     })
-    .bind("0.0.0.0:80")?
+    .bind(&CONFIGURATION.server_bind_point)?
     .run()
     .await?;
     Ok(())
