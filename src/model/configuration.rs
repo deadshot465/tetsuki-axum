@@ -10,4 +10,5 @@ pub struct Configuration {
     pub server_bind_point: String,
     pub server_address: String,
     pub dialog_quality: i32,
+    pub log_level: String,
 }

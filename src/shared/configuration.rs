@@ -24,6 +24,7 @@ fn initialize() -> anyhow::Result<Configuration> {
             server_bind_point: std::env::var("SERVER_BIND_POINT")?,
             server_address: std::env::var("SERVER_ADDRESS")?,
             dialog_quality: 75,
+            log_level: "DEBUG".to_string(),
         };
         let serialized_toml = toml::to_string_pretty(&configuration)?;
         std::fs::write(&configuration_path, &serialized_toml)?;

@@ -4,7 +4,10 @@ use crate::controller::login_controller::login;
 use crate::db::initialize_db;
 use crate::middleware::authentication::Authentication;
 use crate::shared::configuration::CONFIGURATION;
+use actix_web::web::Data;
 use actix_web::{App, HttpServer};
+use env_logger::Builder;
+use log::LevelFilter;
 
 mod controller;
 mod db;
@@ -15,17 +18,30 @@ mod shared;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     if let Err(e) = dotenv::dotenv() {
-        log::error!(".env file not found.");
+        log::error!(".env file not found: {}", e);
     }
 
-    let pool = initialize_db()
-        .await
-        .expect("Failed to initialize database connection.");
+    let log_level = match CONFIGURATION.log_level.as_str() {
+        "DEBUG" => LevelFilter::Debug,
+        "INFO" => LevelFilter::Info,
+        "WARN" => LevelFilter::Warn,
+        "ERROR" => LevelFilter::Error,
+        "TRACE" => LevelFilter::Trace,
+        "OFF" => LevelFilter::Off,
+        _ => LevelFilter::Debug,
+    };
+
+    Builder::new()
+        .filter_level(log_level)
+        .default_format()
+        .init();
 
     HttpServer::new(move || {
         App::new()
             .wrap(Authentication)
-            .app_data(pool.clone())
+            .app_data(Data::new(
+                initialize_db().expect("Failed to initialize database connection."),
+            ))
             .configure(config_credit_controller)
             .configure(config_dialog_controller)
             .service(login)

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize, sqlx::FromRow)]
+#[derive(Deserialize, Serialize, sqlx::FromRow, Clone)]
 #[sqlx(rename_all = "PascalCase")]
 #[serde(rename_all = "PascalCase")]
 pub struct UserCredit {
@@ -10,7 +10,7 @@ pub struct UserCredit {
     pub credits: i32,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct UserCreditUpdateInfo {
     pub credit: i32,
     pub user_id: String,

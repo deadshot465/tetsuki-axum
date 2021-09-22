@@ -1,3 +1,4 @@
+#![allow(clippy::type_complexity)]
 use crate::model::claim::Claim;
 use crate::shared::configuration::CONFIGURATION;
 use actix_service::{Service, Transform};
@@ -59,8 +60,8 @@ where
             authentication_pass = true;
         } else if let Some(header) = req.headers().get("Authorization") {
             let header_value = header.to_str().unwrap_or_default();
-            if header_value.starts_with("Bearer") {
-                let token = header_value[6..].trim();
+            if let Some(token) = header_value.strip_prefix("Bearer") {
+                let token = token.trim();
                 let secret = &CONFIGURATION.jwt_secret;
                 if let Ok(token) = decode::<Claim>(
                     token,

@@ -15,25 +15,47 @@ pub fn config_credit_controller(cfg: &mut ServiceConfig) {
 async fn get_all_user_credits(data: Data<Pool<Postgres>>) -> impl Responder {
     let query_result = sqlx::query_as::<_, UserCredit>("SELECT * FROM \"UserCredits\"")
         .fetch_all(&**data)
-        .await
-        .expect("Failed to query from the database.");
-    let serialized =
-        serde_json::to_string_pretty(&query_result).expect("Failed to serialize to JSON.");
-    HttpResponse::Ok().body(serialized)
+        .await;
+
+    match query_result {
+        Ok(result) => {
+            let serialized =
+                serde_json::to_string_pretty(&result).expect("Failed to serialize to JSON.");
+            HttpResponse::Ok().body(serialized)
+        }
+        Err(e) => {
+            log::error!("Failed to query from the database: {:?}", e);
+            HttpResponse::InternalServerError().body("Failed to query from the database.")
+        }
+    }
 }
 
 #[get("/credit/{user_id}")]
-async fn get_single_user_credits(user_id: Path<i32>, data: Data<Pool<Postgres>>) -> impl Responder {
-    let query_result = sqlx::query_as::<_, UserCredit>(&format!(
-        "SELECT * FROM \"UserCredits\" WHERE \"Id\" = {}",
-        user_id
-    ))
-    .fetch_one(&**data)
-    .await
-    .expect("Failed to get user credit.");
-    let serialized =
-        serde_json::to_string_pretty(&query_result).expect("Failed to serialize to JSON.");
-    HttpResponse::Ok().body(serialized)
+async fn get_single_user_credits(
+    user_id: Path<String>,
+    data: Data<Pool<Postgres>>,
+) -> impl Responder {
+    let query_result =
+        sqlx::query_as::<_, UserCredit>("SELECT * FROM \"UserCredits\" WHERE \"UserId\" = $1")
+            .bind(&*user_id)
+            .fetch_optional(&**data)
+            .await;
+
+    match query_result {
+        Ok(result) => {
+            if let Some(result) = result {
+                let serialized = serde_json::to_string_pretty(&result)
+                    .expect("Failed to serialize user credit to JSON.");
+                HttpResponse::Ok().body(serialized)
+            } else {
+                HttpResponse::NotFound().finish()
+            }
+        }
+        Err(e) => {
+            log::error!("Failed to get user credit: {:?}", e);
+            HttpResponse::InternalServerError().body("Failed to get user credit.")
+        }
+    }
 }
 
 #[post("/credit")]
@@ -57,7 +79,7 @@ async fn add_user(
     .await
     .expect("Failed to insert into database.");
 
-    HttpResponse::Ok().body(String::new())
+    HttpResponse::Created().json((&*request).clone())
 }
 
 #[patch("/credit/{user_id}/plus")]
@@ -73,7 +95,7 @@ async fn add_credit(
             .execute(&**data)
             .await
             .expect("Failed to update user's credit in the database.");
-    HttpResponse::Ok().body(String::new())
+    HttpResponse::Ok().finish()
 }
 
 #[patch("/credit/{user_id}/minus")]
@@ -89,5 +111,5 @@ async fn reduce_credit(
             .execute(&**data)
             .await
             .expect("Failed to update user's credit in the database.");
-    HttpResponse::Ok().body(String::new())
+    HttpResponse::Ok().finish()
 }
