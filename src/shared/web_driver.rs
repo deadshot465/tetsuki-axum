@@ -58,8 +58,13 @@ async fn initialize() -> anyhow::Result<()> {
     if WEB_DRIVER.get().is_none() {
         let driver =
             WebDriver::new(&CONFIGURATION.web_driver_address, capabilities.clone()).await?;
+        let dialog_quality = CONFIGURATION.dialog_quality as f32;
+        let width = 810.0_f32 * (dialog_quality / 100.0);
+        let height = 1080.0_f32 * (dialog_quality / 100.0);
         driver
-            .set_window_rect(OptionRect::new().with_size(810, 1080))
+            .set_window_rect(
+                OptionRect::new().with_size(width.round() as i32, height.round() as i32),
+            )
             .await?;
         WEB_DRIVER
             .set(driver)

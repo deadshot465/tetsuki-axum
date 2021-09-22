@@ -9,4 +9,5 @@ pub struct Configuration {
     pub web_driver_address: String,
     pub server_bind_point: String,
     pub server_address: String,
+    pub dialog_quality: i32,
 }
