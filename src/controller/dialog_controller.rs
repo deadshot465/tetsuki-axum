@@ -1,7 +1,6 @@
 use crate::model::dialog_info::DialogInfo;
 use crate::shared::constants::ASSET_DIRECTORY;
 use crate::shared::web_driver::get_dialog;
-use actix_web::body::*;
 use actix_web::web::ServiceConfig;
 use actix_web::{get, post, HttpResponse, Responder};
 use once_cell::sync::Lazy;
@@ -28,7 +27,7 @@ async fn generate_dialog(request: actix_web::web::Json<DialogInfo>) -> impl Resp
     }
 
     match get_dialog(request.into_inner()).await {
-        Ok(result) => HttpResponse::Ok().body(AnyBody::Bytes(actix_web::web::Bytes::from(result))),
+        Ok(result) => HttpResponse::Ok().body(result),
         Err(e) => {
             log::error!("An error occurred when generating the dialog: {}", e);
             HttpResponse::BadRequest().body(e.to_string())

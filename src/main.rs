@@ -8,6 +8,7 @@ use actix_web::web::Data;
 use actix_web::{App, HttpServer};
 use env_logger::Builder;
 use log::LevelFilter;
+use crate::controller::record_controller::config_record_controller;
 
 mod controller;
 mod db;
@@ -44,6 +45,7 @@ async fn main() -> std::io::Result<()> {
             ))
             .configure(config_credit_controller)
             .configure(config_dialog_controller)
+            .configure(config_record_controller)
             .service(login)
             .service(actix_files::Files::new("/asset/dialog", "./asset/dialog"))
     })
