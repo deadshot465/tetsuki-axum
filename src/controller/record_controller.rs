@@ -70,10 +70,11 @@ async fn post_witchs_bar_record(payload: actix_web::web::Json<PlayerRecordPayloa
     }
 
     let result = sqlx::query(
-        r#"INSERT INTO "WitchsBarRecords" ("player_name", "score") VALUES ($1, $2)"#
+        r#"INSERT INTO "WitchsBarRecords" ("player_name", "score", "stage") VALUES ($1, $2, $3)"#
     )
         .bind(&payload.player_name)
         .bind(&payload.score)
+        .bind(&payload.stage)
         .execute(&**data)
         .await;
 
