@@ -44,16 +44,8 @@ async fn get_stage_witchs_bar_records(stage_id: Path<i32>, data: Data<Pool<Postg
         .await;
 
     match query_result {
-        Ok(opt) => {
-            match opt {
-                None => {
-                    let error_msg = format!("Cannot find corresponding records for the specified level {}.", stage_id.into_inner());
-                    HttpResponse::NotFound().body(error_msg)
-                }
-                Some(payload) => {
-                    HttpResponse::Ok().json(payload)
-                }
-            }
+        Ok(payload) => {
+            HttpResponse::Ok().json(payload)
         }
         Err(e) => {
             let error_msg = format!("An error occurred when querying the database: {:?}", &e);
