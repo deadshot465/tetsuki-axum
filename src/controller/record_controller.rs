@@ -40,7 +40,7 @@ async fn get_all_witchs_bar_records(data: Data<Pool<Postgres>>) -> impl Responde
 async fn get_stage_witchs_bar_records(stage_id: Path<i32>, data: Data<Pool<Postgres>>) -> impl Responder {
     let query_result = sqlx::query_as::<_, PlayerRecordPayload>("SELECT * FROM \"WitchsBarRecords\" WHERE \"stage\" = $1")
         .bind(&*stage_id)
-        .fetch_optional(&**data)
+        .fetch_all(&**data)
         .await;
 
     match query_result {
