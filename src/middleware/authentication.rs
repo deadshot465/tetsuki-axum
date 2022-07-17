@@ -10,6 +10,7 @@ use jsonwebtoken::{decode, DecodingKey, Validation};
 use once_cell::sync::OnceCell;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use time::OffsetDateTime;
 
 static ANONYMOUS_ENDPOINTS: OnceCell<Vec<String>> = OnceCell::new();
 
@@ -69,7 +70,19 @@ where
                     &Validation::default(),
                 ) {
                     log::info!("{:?}", &token.claims);
-                    authentication_pass = true;
+                    match OffsetDateTime::from_unix_timestamp(token.claims.exp as i64) {
+                        Ok(expiry) => {
+                            if expiry > OffsetDateTime::now_utc() {
+                                authentication_pass = true;
+                            }
+                        }
+                        Err(e) => {
+                            log::error!(
+                                "Failed to retrieve token expiration data from timestamp: {}",
+                                e
+                            );
+                        }
+                    }
                 }
             }
         }

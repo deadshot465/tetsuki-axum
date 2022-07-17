@@ -1,6 +1,8 @@
 use crate::controller::credit_controller::config_credit_controller;
 use crate::controller::dialog_controller::config_dialog_controller;
 use crate::controller::login_controller::login;
+use crate::controller::lottery_controller::config_lottery_controller;
+use crate::controller::record_controller::config_record_controller;
 use crate::db::initialize_db;
 use crate::middleware::authentication::Authentication;
 use crate::shared::configuration::CONFIGURATION;
@@ -8,7 +10,6 @@ use actix_web::web::Data;
 use actix_web::{App, HttpServer};
 use env_logger::Builder;
 use log::LevelFilter;
-use crate::controller::record_controller::config_record_controller;
 
 mod controller;
 mod db;
@@ -46,6 +47,7 @@ async fn main() -> std::io::Result<()> {
             .configure(config_credit_controller)
             .configure(config_dialog_controller)
             .configure(config_record_controller)
+            .configure(config_lottery_controller)
             .service(login)
             .service(actix_files::Files::new("/asset/dialog", "./asset/dialog"))
     })
