@@ -1,64 +1,46 @@
-use crate::model::user_credit::{UserCredit, UserCreditUpdateInfo};
-use actix_web::web::{Data, Path, ServiceConfig};
+use crate::model::errors::ServerError;
+use crate::model::user_credit::{UserCredit, UserCreditUpdateInfo, UserCreditUpdateOpt};
+use actix_web::web::{Path, ServiceConfig};
 use actix_web::{get, patch, post, HttpResponse, Responder};
-use sqlx::{Pool, Postgres};
+
+use crate::shared::util::{add_document, get_documents, query_document};
 
 pub fn config_credit_controller(cfg: &mut ServiceConfig) {
     cfg.service(get_all_user_credits)
         .service(get_single_user_credits)
-        .service(add_user)
         .service(add_credit)
         .service(reduce_credit);
+    /*.service(add_user);*/
 }
 
 #[get("/credit")]
-async fn get_all_user_credits(data: Data<Pool<Postgres>>) -> impl Responder {
-    let query_result = sqlx::query_as::<_, UserCredit>("SELECT * FROM \"UserCredits\"")
-        .fetch_all(&**data)
-        .await;
-
-    match query_result {
-        Ok(result) => {
-            let serialized =
-                serde_json::to_string_pretty(&result).expect("Failed to serialize to JSON.");
-            HttpResponse::Ok().body(serialized)
-        }
-        Err(e) => {
-            log::error!("Failed to query from the database: {:?}", e);
-            HttpResponse::InternalServerError().body("Failed to query from the database.")
-        }
+async fn get_all_user_credits() -> impl Responder {
+    if let Some(credits) = get_documents::<UserCredit, _>("UserCredits").await {
+        HttpResponse::Ok().json(credits)
+    } else {
+        HttpResponse::InternalServerError().json(ServerError {
+            error_message: "Failed to retrieve user credits.".to_string(),
+        })
     }
 }
 
 #[get("/credit/{user_id}")]
-async fn get_single_user_credits(
-    user_id: Path<String>,
-    data: Data<Pool<Postgres>>,
-) -> impl Responder {
-    let query_result =
-        sqlx::query_as::<_, UserCredit>("SELECT * FROM \"UserCredits\" WHERE \"UserId\" = $1")
-            .bind(&*user_id)
-            .fetch_optional(&**data)
-            .await;
+async fn get_single_user_credits(user_id: Path<String>) -> impl Responder {
+    let query = format!(
+        r#"SELECT * FROM UserCredits u WHERE u.user_id = "{}""#,
+        user_id.into_inner()
+    );
 
-    match query_result {
-        Ok(result) => {
-            if let Some(result) = result {
-                let serialized = serde_json::to_string_pretty(&result)
-                    .expect("Failed to serialize user credit to JSON.");
-                HttpResponse::Ok().body(serialized)
-            } else {
-                HttpResponse::NotFound().finish()
-            }
-        }
-        Err(e) => {
-            log::error!("Failed to get user credit: {:?}", e);
-            HttpResponse::InternalServerError().body("Failed to get user credit.")
-        }
+    if let Some(query_result) = query_document::<UserCredit, _, _>("UserCredits", query).await {
+        HttpResponse::Ok().json(query_result.first().cloned().unwrap_or_default())
+    } else {
+        HttpResponse::NotFound().json(ServerError {
+            error_message: "Failed to retrieve corresponding user's credit.".into(),
+        })
     }
 }
 
-#[post("/credit")]
+/*#[post("/credit")]
 async fn add_user(
     request: actix_web::web::Json<UserCredit>,
     data: Data<Pool<Postgres>>,
@@ -80,36 +62,59 @@ async fn add_user(
     .expect("Failed to insert into database.");
 
     HttpResponse::Created().json((&*request).clone())
-}
+}*/
 
 #[patch("/credit/{user_id}/plus")]
 async fn add_credit(
     user_id: Path<String>,
     request: actix_web::web::Json<UserCreditUpdateInfo>,
-    data: Data<Pool<Postgres>>,
 ) -> impl Responder {
-    let _ =
-        sqlx::query(r#"UPDATE "UserCredits" SET "Credits" = "Credits" + $1 WHERE "UserId" = $2"#)
-            .bind(request.credit)
-            .bind((&*user_id).clone())
-            .execute(&**data)
-            .await
-            .expect("Failed to update user's credit in the database.");
-    HttpResponse::Ok().finish()
+    adjust_credit(user_id, request, UserCreditUpdateOpt::Plus).await
 }
 
 #[patch("/credit/{user_id}/minus")]
 async fn reduce_credit(
     user_id: Path<String>,
     request: actix_web::web::Json<UserCreditUpdateInfo>,
-    data: Data<Pool<Postgres>>,
 ) -> impl Responder {
-    let _ =
-        sqlx::query(r#"UPDATE "UserCredits" SET "Credits" = "Credits" - $1 WHERE "UserId" = $2"#)
-            .bind(request.credit)
-            .bind((&*user_id).clone())
-            .execute(&**data)
-            .await
-            .expect("Failed to update user's credit in the database.");
-    HttpResponse::Ok().finish()
+    adjust_credit(user_id, request, UserCreditUpdateOpt::Minus).await
+}
+
+async fn adjust_credit(
+    user_id: Path<String>,
+    request: actix_web::web::Json<UserCreditUpdateInfo>,
+    opt: UserCreditUpdateOpt,
+) -> impl Responder {
+    let query = format!(
+        r#"SELECT * FROM UserCredits u WHERE u.user_id = "{}""#,
+        user_id.into_inner()
+    );
+
+    let query_result = query_document::<UserCredit, _, _>("UserCredits", query).await;
+    if query_result.is_none() {
+        return HttpResponse::NotFound().json(ServerError {
+            error_message: "Cannot update user's credit because the specified user doesn't exist."
+                .into(),
+        });
+    }
+
+    let query_result = query_result
+        .and_then(|v| v.first().cloned())
+        .unwrap_or_default();
+    let new_document = UserCredit {
+        credits: match opt {
+            UserCreditUpdateOpt::Plus => query_result.credits + request.credit,
+            UserCreditUpdateOpt::Minus => query_result.credits - request.credit,
+        },
+        ..query_result
+    };
+
+    match add_document("UserCredits", new_document).await {
+        Ok(_) => HttpResponse::Ok().finish(),
+        Err(e) => {
+            let error_message = format!("{}", e);
+            log::error!("{}", &error_message);
+            HttpResponse::InternalServerError().json(ServerError { error_message })
+        }
+    }
 }

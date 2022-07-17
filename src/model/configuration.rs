@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Configuration {
     pub database_url: String,
     pub jwt_secret: String,
@@ -11,4 +11,7 @@ pub struct Configuration {
     pub server_address: String,
     pub dialog_quality: i32,
     pub log_level: String,
+    pub cosmos_db_primary_key: String,
+    pub cosmos_db_database_name: String,
+    pub cosmos_db_account: String,
 }

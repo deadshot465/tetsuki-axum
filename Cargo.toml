@@ -12,6 +12,8 @@ actix-service = "~2.0.2"
 actix-web = { version = "~4.0.1", features = ["rustls"] }
 anyhow = "~1.0.57"
 awc = "~3.0.0"
+azure_core = "~0.3.0"
+azure_data_cosmos = "~0.4.0"
 chrono = "~0.4.19"
 dashmap = "~5.2.0"
 dotenv = "~0.15.0"
