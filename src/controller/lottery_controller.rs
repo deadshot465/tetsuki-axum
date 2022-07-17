@@ -5,6 +5,8 @@ use crate::model::user_credit::{UserCredit, UserCreditUpdateInfo, UserCreditUpda
 use crate::shared::util::{add_document, adjust_credit, get_documents, query_document};
 use actix_web::web::{Path, ServiceConfig};
 use actix_web::{get, post, HttpResponse, Responder};
+use azure_core::error::Error;
+use azure_data_cosmos::operations::CreateDocumentResponse;
 use azure_data_cosmos::prelude::{Param, Query};
 use std::ops::Add;
 use time::format_description::well_known::Rfc3339;
@@ -13,7 +15,7 @@ use uuid::Uuid;
 
 const USER_LOTTERIES: &str = "UserLotteries";
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum RewardType {
     Daily,
     Weekly,
@@ -153,7 +155,7 @@ async fn add_lottery(
                     HttpResponse::Created().json(new_document)
                 }
                 Err(e) => {
-                    let error_message = format!("{}", e);
+                    let error_message = format!("Failed to add a new lottery: {}", e);
                     log::error!("{}", &error_message);
                     HttpResponse::InternalServerError()
                         .json(ServerError::with_message(error_message))
@@ -182,7 +184,7 @@ async fn add_lottery(
                     HttpResponse::Created().json(new_document)
                 }
                 Err(e) => {
-                    let error_message = format!("{}", e);
+                    let error_message = format!("Failed to add a new lottery: {}", e);
                     log::error!("{}", &error_message);
                     HttpResponse::InternalServerError()
                         .json(ServerError::with_message(error_message))
@@ -215,7 +217,37 @@ async fn get_reward(user_id: Path<String>, reward_type: RewardType) -> impl Resp
                 > OffsetDateTime::parse(&next_reward_time, &Rfc3339)
                     .unwrap_or(OffsetDateTime::UNIX_EPOCH)
             {
-                update_credits(user_lottery, reward_type).await
+                let response = update_credits(&user_lottery, reward_type).await;
+
+                let new_document = UserLottery {
+                    next_daily_time: if reward_type == RewardType::Daily {
+                        OffsetDateTime::now_utc()
+                            .add(time::Duration::days(1))
+                            .format(&Rfc3339)
+                            .unwrap_or_default()
+                    } else {
+                        user_lottery.next_daily_time.clone()
+                    },
+                    next_weekly_time: if reward_type == RewardType::Weekly {
+                        OffsetDateTime::now_utc()
+                            .add(time::Duration::days(7))
+                            .format(&Rfc3339)
+                            .unwrap_or_default()
+                    } else {
+                        user_lottery.next_weekly_time.clone()
+                    },
+                    ..user_lottery
+                };
+
+                match add_document(USER_LOTTERIES, new_document).await {
+                    Ok(_) => response,
+                    Err(e) => {
+                        let error_message = format!("Failed to update next reward time: {}", e);
+                        log::error!("{}", &error_message);
+                        HttpResponse::InternalServerError()
+                            .json(ServerError::with_message(error_message))
+                    }
+                }
             } else {
                 HttpResponse::NoContent().finish()
             }
@@ -223,7 +255,7 @@ async fn get_reward(user_id: Path<String>, reward_type: RewardType) -> impl Resp
     }
 }
 
-async fn update_credits(user_lottery: UserLottery, reward_type: RewardType) -> HttpResponse {
+async fn update_credits(user_lottery: &UserLottery, reward_type: RewardType) -> HttpResponse {
     adjust_credit(
         user_lottery.user_id.clone(),
         UserCreditUpdateInfo {
