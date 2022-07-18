@@ -2,11 +2,12 @@ use crate::controller::credit_controller::USER_CREDITS;
 use crate::model::errors::ServerError;
 use crate::model::lottery::{UserLottery, UserLotteryUpdateInfo};
 use crate::model::user_credit::{UserCredit, UserCreditUpdateInfo, UserCreditUpdateOpt};
-use crate::shared::util::{add_document, adjust_credit, get_documents, query_document};
+use crate::shared::util::{
+    add_document, add_document_into_collection, adjust_credit, adjust_credit_in_collection,
+    get_documents, initialize_clients, query_document, query_document_within_collection,
+};
 use actix_web::web::{Path, ServiceConfig};
-use actix_web::{get, post, HttpResponse, Responder};
-use azure_core::error::Error;
-use azure_data_cosmos::operations::CreateDocumentResponse;
+use actix_web::{delete, get, post, HttpResponse, Responder};
 use azure_data_cosmos::prelude::{Param, Query};
 use std::ops::Add;
 use time::format_description::well_known::Rfc3339;
@@ -26,7 +27,8 @@ pub fn config_lottery_controller(cfg: &mut ServiceConfig) {
         .service(get_weekly_reward)
         .service(get_all_lotteries)
         .service(get_user_lotteries)
-        .service(add_lottery);
+        .service(add_lottery)
+        .service(delete_lotteries);
 }
 
 #[get("/lottery/{user_id}/daily")]
@@ -87,6 +89,9 @@ async fn add_lottery(
 
     let user_id = user_id.into_inner();
     let lottery_count = payload.lotteries.len();
+    let (_client, database) = initialize_clients();
+    let lottery_collection = database.collection_client(USER_LOTTERIES);
+    let credit_collection = database.collection_client(USER_CREDITS);
 
     let query = Query::with_params(
         format!(
@@ -96,7 +101,7 @@ async fn add_lottery(
         vec![Param::new("@user_id".into(), user_id.clone())],
     );
 
-    let user_credit = query_document::<UserCredit, _, _>(USER_CREDITS, query)
+    let user_credit = query_document_within_collection::<UserCredit, _>(&credit_collection, query)
         .await
         .and_then(|res| res.first().cloned());
 
@@ -112,6 +117,21 @@ async fn add_lottery(
                     "The specified user doesn't have enough credits.",
                 ));
             }
+
+            if credit.username.as_str() != payload.username.as_str() {
+                let new_document = UserCredit {
+                    username: payload.username.clone(),
+                    ..credit
+                };
+
+                if let Err(e) = add_document_into_collection(&credit_collection, new_document).await
+                {
+                    log::error!(
+                        "Failed to update user's name during lottery purchase: {}",
+                        e
+                    );
+                }
+            }
         }
     }
 
@@ -124,8 +144,11 @@ async fn add_lottery(
     );
 
     let mut payload = payload.into_inner();
+    for lottery in payload.lotteries.iter_mut() {
+        lottery.sort_unstable();
+    }
 
-    match query_document::<UserLottery, _, _>(USER_LOTTERIES, query).await {
+    match query_document_within_collection::<UserLottery, _>(&lottery_collection, query).await {
         None => {
             let new_document = UserLottery {
                 id: Uuid::new_v4().to_string(),
@@ -141,13 +164,13 @@ async fn add_lottery(
                 lotteries: payload.lotteries,
             };
 
-            match add_document(USER_LOTTERIES, new_document.clone()).await {
+            match add_document_into_collection(&lottery_collection, new_document.clone()).await {
                 Ok(_) => {
-                    adjust_credit(
+                    adjust_credit_in_collection(
+                        &credit_collection,
                         user_id.clone(),
                         UserCreditUpdateInfo {
                             credit: (10 * lottery_count) as i32,
-                            user_id,
                         },
                         UserCreditUpdateOpt::Minus,
                     )
@@ -170,13 +193,13 @@ async fn add_lottery(
                 ..user_lottery
             };
 
-            match add_document(USER_LOTTERIES, new_document.clone()).await {
+            match add_document_into_collection(&lottery_collection, new_document.clone()).await {
                 Ok(_) => {
-                    adjust_credit(
+                    adjust_credit_in_collection(
+                        &credit_collection,
                         user_id.clone(),
                         UserCreditUpdateInfo {
                             credit: (10 * lottery_count) as i32,
-                            user_id,
                         },
                         UserCreditUpdateOpt::Minus,
                     )
@@ -194,13 +217,55 @@ async fn add_lottery(
     }
 }
 
-async fn get_reward(user_id: Path<String>, reward_type: RewardType) -> impl Responder {
+#[delete("/lottery/{user_id}")]
+async fn delete_lotteries(user_id: Path<String>) -> impl Responder {
+    let user_id = user_id.into_inner();
     let query = Query::with_params(
         format!(
             "SELECT * FROM {} u WHERE u.user_id = @user_id",
             USER_LOTTERIES
         ),
-        vec![Param::new("@user_id".into(), user_id.into_inner())],
+        vec![Param::new("@user_id".into(), user_id.clone())],
+    );
+
+    let query_result = query_document::<UserLottery, _, _>(USER_LOTTERIES, query)
+        .await
+        .and_then(|v| v.first().cloned());
+
+    match query_result {
+        None => HttpResponse::NotFound().json(ServerError::with_message(
+            "The specified user is not found.",
+        )),
+        Some(user_lottery) => {
+            let new_document = UserLottery {
+                lotteries: vec![],
+                ..user_lottery
+            };
+
+            match add_document(USER_LOTTERIES, new_document).await {
+                Ok(_) => HttpResponse::NoContent().finish(),
+                Err(e) => {
+                    let error_message = format!(
+                        "Failed to remove all lotteries from the user {}: {}",
+                        user_id, e
+                    );
+                    log::error!("{}", &error_message);
+                    HttpResponse::InternalServerError()
+                        .json(ServerError::with_message(error_message))
+                }
+            }
+        }
+    }
+}
+
+async fn get_reward(user_id: Path<String>, reward_type: RewardType) -> impl Responder {
+    let user_id = user_id.into_inner();
+    let query = Query::with_params(
+        format!(
+            "SELECT * FROM {} u WHERE u.user_id = @user_id",
+            USER_LOTTERIES
+        ),
+        vec![Param::new("@user_id".into(), user_id.clone())],
     );
 
     match query_document::<UserLottery, _, _>("UserLotteries", query).await {
@@ -249,7 +314,7 @@ async fn get_reward(user_id: Path<String>, reward_type: RewardType) -> impl Resp
                     }
                 }
             } else {
-                HttpResponse::NoContent().finish()
+                HttpResponse::Accepted().json(user_lottery)
             }
         }
     }
@@ -263,7 +328,6 @@ async fn update_credits(user_lottery: &UserLottery, reward_type: RewardType) -> 
                 RewardType::Daily => 10,
                 RewardType::Weekly => 70,
             },
-            user_id: user_lottery.user_id.clone(),
         },
         UserCreditUpdateOpt::Plus,
     )

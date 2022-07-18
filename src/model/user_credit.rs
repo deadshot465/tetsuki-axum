@@ -12,7 +12,6 @@ pub struct UserCredit {
 #[derive(Deserialize, Serialize, Clone)]
 pub struct UserCreditUpdateInfo {
     pub credit: i32,
-    pub user_id: String,
 }
 
 #[derive(Copy, Clone, Debug)]

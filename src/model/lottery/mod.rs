@@ -38,5 +38,6 @@ impl Default for UserLottery {
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct UserLotteryUpdateInfo {
+    pub username: String,
     pub lotteries: Vec<Vec<u8>>,
 }

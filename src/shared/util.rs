@@ -1,3 +1,4 @@
+use crate::controller::credit_controller::USER_CREDITS;
 use crate::model::errors::ServerError;
 use crate::model::user_credit::{UserCredit, UserCreditUpdateInfo, UserCreditUpdateOpt};
 use crate::CONFIGURATION;
@@ -98,6 +99,13 @@ where
     let (_client, database) = initialize_clients();
     let collection = database.collection_client(collection_name);
 
+    add_document_into_collection(&collection, new_document).await
+}
+
+pub async fn add_document_into_collection<D: Serialize + CosmosEntity + Send + 'static>(
+    collection: &CollectionClient,
+    new_document: D,
+) -> Result<CreateDocumentResponse, azure_core::error::Error> {
     collection
         .create_document(new_document)
         .is_upsert(true)
@@ -110,12 +118,24 @@ pub async fn adjust_credit(
     request: UserCreditUpdateInfo,
     opt: UserCreditUpdateOpt,
 ) -> HttpResponse {
+    let (_client, database) = initialize_clients();
+    let collection = database.collection_client(USER_CREDITS);
+    adjust_credit_in_collection(&collection, user_id, request, opt).await
+}
+
+pub async fn adjust_credit_in_collection(
+    credit_collection: &CollectionClient,
+    user_id: String,
+    request: UserCreditUpdateInfo,
+    opt: UserCreditUpdateOpt,
+) -> HttpResponse {
     let query = Query::with_params(
         "SELECT * FROM UserCredits u WHERE u.user_id = @user_id".into(),
         vec![Param::new("@user_id".into(), user_id)],
     );
 
-    let query_result = query_document::<UserCredit, _, _>("UserCredits", query).await;
+    let query_result =
+        query_document_within_collection::<UserCredit, _>(credit_collection, query).await;
     if query_result.is_none() {
         return HttpResponse::NotFound().json(ServerError {
             error_message: "Cannot update user's credit because the specified user doesn't exist."
@@ -134,7 +154,7 @@ pub async fn adjust_credit(
         ..query_result
     };
 
-    match add_document("UserCredits", new_document.clone()).await {
+    match add_document_into_collection(credit_collection, new_document.clone()).await {
         Ok(_) => HttpResponse::Ok().json(new_document),
         Err(e) => {
             let error_message = format!("{}", e);
