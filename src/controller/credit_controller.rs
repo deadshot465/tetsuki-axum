@@ -41,7 +41,8 @@ async fn get_single_user_credits(user_id: Path<String>) -> impl Responder {
         vec![Param::new("@user_id".into(), user_id.into_inner())],
     );
 
-    if let Some(query_result) = query_document::<UserCredit, _, _>(USER_CREDITS, query).await {
+    if let Some(query_result) = query_document::<UserCredit, _, _>(USER_CREDITS, query, true).await
+    {
         HttpResponse::Ok().json(query_result.first().cloned().unwrap_or_default())
     } else {
         HttpResponse::NotFound().json(ServerError {
@@ -70,15 +71,17 @@ async fn add_user(request: actix_web::web::Json<UserCredit>) -> impl Responder {
         vec![Param::new("@user_id".into(), request.user_id.clone())],
     );
 
-    let query_result = query_document::<UserCredit, _, _>(USER_CREDITS, query).await;
+    let query_result = query_document::<UserCredit, _, _>(USER_CREDITS, query, true).await;
     if query_result.is_some() {
         return HttpResponse::BadRequest().json(ServerError::with_message(
             "Specified user already exists. Use PATCH to update user's information.",
         ));
     }
 
-    match add_document(USER_CREDITS, request.into_inner()).await {
-        Ok(_) => HttpResponse::Created().finish(),
+    let request = request.into_inner();
+
+    match add_document(USER_CREDITS, request.clone()).await {
+        Ok(_) => HttpResponse::Created().json(request),
         Err(e) => {
             let error_message = format!("{}", e);
             log::error!("{}", &error_message);
@@ -125,7 +128,7 @@ async fn delete_user(user_id: Path<String>) -> impl Responder {
         ),
         vec![Param::new("@user_id".into(), user_id.into_inner())],
     );
-    let query_result = query_document_within_collection::<UserCredit, _>(&collection, query)
+    let query_result = query_document_within_collection::<UserCredit, _>(&collection, query, true)
         .await
         .and_then(|result| result.first().cloned());
 

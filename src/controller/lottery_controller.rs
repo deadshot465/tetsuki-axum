@@ -62,7 +62,9 @@ async fn get_user_lotteries(user_id: Path<String>) -> impl Responder {
         vec![Param::new("@user_id".into(), user_id.into_inner())],
     );
 
-    if let Some(query_result) = query_document::<UserLottery, _, _>(USER_LOTTERIES, query).await {
+    if let Some(query_result) =
+        query_document::<UserLottery, _, _>(USER_LOTTERIES, query, true).await
+    {
         let user_lottery = query_result.first().cloned().unwrap_or_default();
         HttpResponse::Ok().json(user_lottery)
     } else {
@@ -101,9 +103,10 @@ async fn add_lottery(
         vec![Param::new("@user_id".into(), user_id.clone())],
     );
 
-    let user_credit = query_document_within_collection::<UserCredit, _>(&credit_collection, query)
-        .await
-        .and_then(|res| res.first().cloned());
+    let user_credit =
+        query_document_within_collection::<UserCredit, _>(&credit_collection, query, true)
+            .await
+            .and_then(|res| res.first().cloned());
 
     match user_credit {
         None => {
@@ -148,7 +151,8 @@ async fn add_lottery(
         lottery.sort_unstable();
     }
 
-    match query_document_within_collection::<UserLottery, _>(&lottery_collection, query).await {
+    match query_document_within_collection::<UserLottery, _>(&lottery_collection, query, true).await
+    {
         None => {
             let new_document = UserLottery {
                 id: Uuid::new_v4().to_string(),
@@ -228,7 +232,7 @@ async fn delete_lotteries(user_id: Path<String>) -> impl Responder {
         vec![Param::new("@user_id".into(), user_id.clone())],
     );
 
-    let query_result = query_document::<UserLottery, _, _>(USER_LOTTERIES, query)
+    let query_result = query_document::<UserLottery, _, _>(USER_LOTTERIES, query, true)
         .await
         .and_then(|v| v.first().cloned());
 
@@ -268,7 +272,7 @@ async fn get_reward(user_id: Path<String>, reward_type: RewardType) -> impl Resp
         vec![Param::new("@user_id".into(), user_id.clone())],
     );
 
-    match query_document::<UserLottery, _, _>("UserLotteries", query).await {
+    match query_document::<UserLottery, _, _>("UserLotteries", query, true).await {
         None => HttpResponse::NotFound().json(ServerError::with_message(
             "The specified user is not found.",
         )),

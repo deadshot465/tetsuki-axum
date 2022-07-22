@@ -2,7 +2,9 @@ use crate::controller::credit_controller::config_credit_controller;
 use crate::controller::dialog_controller::config_dialog_controller;
 use crate::controller::login_controller::login;
 use crate::controller::lottery_controller::config_lottery_controller;
+use crate::controller::mal_character_controller::config_mal_character_controller;
 use crate::controller::record_controller::config_record_controller;
+use crate::controller::roll_controller::config_roll_controller;
 use crate::db::initialize_db;
 use crate::middleware::authentication::Authentication;
 use crate::shared::configuration::CONFIGURATION;
@@ -48,6 +50,8 @@ async fn main() -> std::io::Result<()> {
             .configure(config_dialog_controller)
             .configure(config_record_controller)
             .configure(config_lottery_controller)
+            .configure(config_mal_character_controller)
+            .configure(config_roll_controller)
             .service(login)
             .service(actix_files::Files::new("/asset/dialog", "./asset/dialog"))
     })

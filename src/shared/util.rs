@@ -36,7 +36,11 @@ where
     documents
 }
 
-pub async fn query_document<T, S, Q>(collection_name: S, query: Q) -> Option<Vec<T>>
+pub async fn query_document<T, S, Q>(
+    collection_name: S,
+    query: Q,
+    cross_partition: bool,
+) -> Option<Vec<T>>
 where
     T: DeserializeOwned + Send + Sync + Clone,
     S: Into<std::borrow::Cow<'static, str>>,
@@ -44,12 +48,13 @@ where
 {
     let (_client, database) = initialize_clients();
     let collection = database.collection_client(collection_name);
-    query_document_within_collection(&collection, query).await
+    query_document_within_collection(&collection, query, cross_partition).await
 }
 
 pub async fn query_document_within_collection<T, Q>(
     collection: &CollectionClient,
     query: Q,
+    cross_partition: bool,
 ) -> Option<Vec<T>>
 where
     T: DeserializeOwned + Send + Sync + Clone,
@@ -57,7 +62,7 @@ where
 {
     let documents: Option<Vec<T>> = collection
         .query_documents(query)
-        .query_cross_partition(true)
+        .query_cross_partition(cross_partition)
         .into_stream::<T>()
         .collect::<Vec<_>>()
         .await
@@ -135,7 +140,7 @@ pub async fn adjust_credit_in_collection(
     );
 
     let query_result =
-        query_document_within_collection::<UserCredit, _>(credit_collection, query).await;
+        query_document_within_collection::<UserCredit, _>(credit_collection, query, true).await;
     if query_result.is_none() {
         return HttpResponse::NotFound().json(ServerError {
             error_message: "Cannot update user's credit because the specified user doesn't exist."
