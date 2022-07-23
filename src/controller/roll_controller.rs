@@ -2,19 +2,18 @@ use crate::controller::mal_character_controller::{inner_get_all_mal_characters, 
 use crate::model::errors::ServerError;
 use crate::model::user_roll::{GetRollResult, UserRoll};
 use crate::shared::util::{
-    add_document, initialize_clients, query_document, query_document_within_collection,
+    add_document, get_documents, initialize_clients, query_document_within_collection,
 };
 use actix_web::web::{Path, ServiceConfig};
 use actix_web::{get, post, HttpResponse, Responder};
 use azure_data_cosmos::prelude::{CollectionClient, Param, Query};
-use std::collections::HashMap;
 use uuid::Uuid;
 
 const USER_ROLLS: &str = "UserRolls";
 
 pub fn config_roll_controller(cfg: &mut ServiceConfig) {
     cfg.service(post_user_roll)
-        .service(get_last_roll_id)
+        .service(get_all_rolls)
         .service(get_all_user_rolls)
         .service(get_user_roll_by_id);
 }
@@ -39,6 +38,14 @@ async fn post_user_roll(
     }
 }
 
+#[get("/user_roll")]
+async fn get_all_rolls() -> impl Responder {
+    let query_result = get_documents::<UserRoll, _>(USER_ROLLS)
+        .await
+        .unwrap_or_default();
+    HttpResponse::Ok().json(query_result)
+}
+
 #[get("/user_roll/{user_id}")]
 async fn get_all_user_rolls(user_id: Path<String>) -> impl Responder {
     let query_result = inner_get_all_user_rolls_with_names(user_id.into_inner()).await;
@@ -58,25 +65,6 @@ async fn get_user_roll_by_id(path: Path<(String, i32)>) -> impl Responder {
         None => HttpResponse::NotFound().json(ServerError::with_message(
             "Cannot find the specified roll within user's rolls.",
         )),
-    }
-}
-
-#[get("/user_roll/ids/last")]
-async fn get_last_roll_id() -> impl Responder {
-    let query = Query::new(format!("SELECT MAX(u.Id) FROM {} u", USER_ROLLS));
-    let query_result = query_document::<HashMap<String, i32>, _, _>(USER_ROLLS, query, false)
-        .await
-        .and_then(|v| v.first().cloned());
-
-    match query_result {
-        Some(map) => {
-            let last_id = map["$1"];
-            let mut result = HashMap::new();
-            result.insert("last_id".to_string(), last_id);
-            log::debug!("{:?}", &result);
-            HttpResponse::Ok().json(result)
-        }
-        None => HttpResponse::NoContent().finish(),
     }
 }
 

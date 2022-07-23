@@ -23,7 +23,7 @@ where
         .await
         .into_iter()
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| log::error!("Failed to retrieve user credits: {}", e))
+        .map_err(|e| log::error!("Failed to retrieve all documents: {}", e))
         .ok()
         .and_then(|result| result.first().cloned())
         .map(|response| {
