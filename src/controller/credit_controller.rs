@@ -1,115 +1,158 @@
-use crate::model::user_credit::{UserCredit, UserCreditUpdateInfo};
-use actix_web::web::{Data, Path, ServiceConfig};
-use actix_web::{get, patch, post, HttpResponse, Responder};
-use sqlx::{Pool, Postgres};
+use crate::model::errors::ServerError;
+use crate::model::user_credit::{UserCredit, UserCreditUpdateInfo, UserCreditUpdateOpt};
+use actix_web::web::{Path, ServiceConfig};
+use actix_web::{delete, get, patch, post, HttpResponse, Responder};
+use azure_data_cosmos::prelude::{Param, Query};
+
+use crate::shared::util::{
+    add_document, adjust_credit, get_documents, initialize_clients, query_document,
+    query_document_within_collection,
+};
+
+pub const USER_CREDITS: &str = "UserCredits";
 
 pub fn config_credit_controller(cfg: &mut ServiceConfig) {
     cfg.service(get_all_user_credits)
         .service(get_single_user_credits)
-        .service(add_user)
         .service(add_credit)
-        .service(reduce_credit);
+        .service(reduce_credit)
+        .service(add_user)
+        .service(delete_user);
 }
 
 #[get("/credit")]
-async fn get_all_user_credits(data: Data<Pool<Postgres>>) -> impl Responder {
-    let query_result = sqlx::query_as::<_, UserCredit>("SELECT * FROM \"UserCredits\"")
-        .fetch_all(&**data)
-        .await;
-
-    match query_result {
-        Ok(result) => {
-            let serialized =
-                serde_json::to_string_pretty(&result).expect("Failed to serialize to JSON.");
-            HttpResponse::Ok().body(serialized)
-        }
-        Err(e) => {
-            log::error!("Failed to query from the database: {:?}", e);
-            HttpResponse::InternalServerError().body("Failed to query from the database.")
-        }
+async fn get_all_user_credits() -> impl Responder {
+    if let Some(credits) = get_documents::<UserCredit, _>(USER_CREDITS).await {
+        HttpResponse::Ok().json(credits)
+    } else {
+        HttpResponse::InternalServerError().json(ServerError {
+            error_message: "Failed to retrieve user credits.".to_string(),
+        })
     }
 }
 
 #[get("/credit/{user_id}")]
-async fn get_single_user_credits(
-    user_id: Path<String>,
-    data: Data<Pool<Postgres>>,
-) -> impl Responder {
-    let query_result =
-        sqlx::query_as::<_, UserCredit>("SELECT * FROM \"UserCredits\" WHERE \"UserId\" = $1")
-            .bind(&*user_id)
-            .fetch_optional(&**data)
-            .await;
+async fn get_single_user_credits(user_id: Path<String>) -> impl Responder {
+    let query = Query::with_params(
+        format!(
+            "SELECT * FROM {} u WHERE u.user_id = @user_id",
+            USER_CREDITS
+        ),
+        vec![Param::new("@user_id".into(), user_id.into_inner())],
+    );
 
-    match query_result {
-        Ok(result) => {
-            if let Some(result) = result {
-                let serialized = serde_json::to_string_pretty(&result)
-                    .expect("Failed to serialize user credit to JSON.");
-                HttpResponse::Ok().body(serialized)
-            } else {
-                HttpResponse::NotFound().finish()
-            }
-        }
-        Err(e) => {
-            log::error!("Failed to get user credit: {:?}", e);
-            HttpResponse::InternalServerError().body("Failed to get user credit.")
-        }
+    if let Some(query_result) = query_document::<UserCredit, _, _>(USER_CREDITS, query, true).await
+    {
+        HttpResponse::Ok().json(query_result.first().cloned().unwrap_or_default())
+    } else {
+        HttpResponse::NotFound().json(ServerError {
+            error_message: "The specified user's credit info is not found.".into(),
+        })
     }
 }
 
 #[post("/credit")]
-async fn add_user(
-    request: actix_web::web::Json<UserCredit>,
-    data: Data<Pool<Postgres>>,
-) -> impl Responder {
+async fn add_user(request: actix_web::web::Json<UserCredit>) -> impl Responder {
     if request.username.is_empty() || request.user_id.is_empty() {
-        return HttpResponse::BadRequest().body("Either the userId or the username is empty.");
+        return HttpResponse::BadRequest().json(ServerError::with_message(
+            "Either the user ID or the username is empty.",
+        ));
     } else if request.credits < 0 {
-        return HttpResponse::BadRequest().body("The amount of credits has to be greater than 0.");
+        return HttpResponse::BadRequest().json(ServerError::with_message(
+            "The amount of credits has to be greater than 0.",
+        ));
     }
 
-    let _ = sqlx::query(
-        r#"INSERT INTO "UserCredits" ("Username", "UserId", "Credits") VALUES ($1, $2, $3)"#,
-    )
-    .bind(&request.username)
-    .bind(&request.user_id)
-    .bind(&request.credits)
-    .execute(&**data)
-    .await
-    .expect("Failed to insert into database.");
+    let query = Query::with_params(
+        format!(
+            "SELECT * FROM {} u WHERE u.user_id = @user_id",
+            USER_CREDITS
+        ),
+        vec![Param::new("@user_id".into(), request.user_id.clone())],
+    );
 
-    HttpResponse::Created().json((&*request).clone())
+    let query_result = query_document::<UserCredit, _, _>(USER_CREDITS, query, true).await;
+    if query_result.is_some() {
+        return HttpResponse::BadRequest().json(ServerError::with_message(
+            "Specified user already exists. Use PATCH to update user's information.",
+        ));
+    }
+
+    let request = request.into_inner();
+
+    match add_document(USER_CREDITS, request.clone()).await {
+        Ok(_) => HttpResponse::Created().json(request),
+        Err(e) => {
+            let error_message = format!("{}", e);
+            log::error!("{}", &error_message);
+            HttpResponse::InternalServerError().json(ServerError::with_message(error_message))
+        }
+    }
 }
 
 #[patch("/credit/{user_id}/plus")]
 async fn add_credit(
     user_id: Path<String>,
     request: actix_web::web::Json<UserCreditUpdateInfo>,
-    data: Data<Pool<Postgres>>,
 ) -> impl Responder {
-    let _ =
-        sqlx::query(r#"UPDATE "UserCredits" SET "Credits" = "Credits" + $1 WHERE "UserId" = $2"#)
-            .bind(request.credit)
-            .bind((&*user_id).clone())
-            .execute(&**data)
-            .await
-            .expect("Failed to update user's credit in the database.");
-    HttpResponse::Ok().finish()
+    adjust_credit(
+        user_id.into_inner(),
+        request.into_inner(),
+        UserCreditUpdateOpt::Plus,
+    )
+    .await
 }
 
 #[patch("/credit/{user_id}/minus")]
 async fn reduce_credit(
     user_id: Path<String>,
     request: actix_web::web::Json<UserCreditUpdateInfo>,
-    data: Data<Pool<Postgres>>,
 ) -> impl Responder {
-    let _ =
-        sqlx::query(r#"UPDATE "UserCredits" SET "Credits" = "Credits" - $1 WHERE "UserId" = $2"#)
-            .bind(request.credit)
-            .bind((&*user_id).clone())
-            .execute(&**data)
-            .await
-            .expect("Failed to update user's credit in the database.");
-    HttpResponse::Ok().finish()
+    adjust_credit(
+        user_id.into_inner(),
+        request.into_inner(),
+        UserCreditUpdateOpt::Minus,
+    )
+    .await
+}
+
+#[delete("/credit/{user_id}")]
+async fn delete_user(user_id: Path<String>) -> impl Responder {
+    let (_client, database) = initialize_clients();
+    let collection = database.collection_client(USER_CREDITS);
+
+    let query = Query::with_params(
+        format!(
+            "SELECT * FROM {} u WHERE u.user_id = @user_id",
+            USER_CREDITS
+        ),
+        vec![Param::new("@user_id".into(), user_id.into_inner())],
+    );
+    let query_result = query_document_within_collection::<UserCredit, _>(&collection, query, true)
+        .await
+        .and_then(|result| result.first().cloned());
+
+    if let Some(result) = query_result {
+        let document = collection.document_client(result.id.clone(), &result.id);
+        match document {
+            Ok(doc) => match doc.delete_document().into_future().await {
+                Ok(_) => HttpResponse::NoContent().finish(),
+                Err(e) => {
+                    let error_message = format!("Failed to delete user credit: {}", e);
+                    log::error!("{}", &error_message);
+                    HttpResponse::InternalServerError()
+                        .json(ServerError::with_message(error_message))
+                }
+            },
+            Err(e) => {
+                let error_message = format!("{}", e);
+                log::error!("{}", &error_message);
+                HttpResponse::InternalServerError().json(ServerError::with_message(error_message))
+            }
+        }
+    } else {
+        HttpResponse::NotFound().json(ServerError::with_message(
+            "The specified user doesn't exist.",
+        ))
+    }
 }
