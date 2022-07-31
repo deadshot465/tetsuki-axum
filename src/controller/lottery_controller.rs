@@ -1,12 +1,13 @@
 use crate::controller::credit_controller::USER_CREDITS;
+use crate::model::cosmos_db::CosmosDb;
 use crate::model::errors::ServerError;
 use crate::model::lottery::{UserLottery, UserLotteryUpdateInfo};
 use crate::model::user_credit::{UserCredit, UserCreditUpdateInfo, UserCreditUpdateOpt};
 use crate::shared::util::{
     add_document, add_document_into_collection, adjust_credit, adjust_credit_in_collection,
-    get_documents, initialize_clients, query_document, query_document_within_collection,
+    get_documents, query_document, query_document_within_collection,
 };
-use actix_web::web::{Path, ServiceConfig};
+use actix_web::web::{Data, Path, ServiceConfig};
 use actix_web::{delete, get, post, HttpResponse, Responder};
 use azure_data_cosmos::prelude::{Param, Query};
 use std::ops::Add;
@@ -32,18 +33,20 @@ pub fn config_lottery_controller(cfg: &mut ServiceConfig) {
 }
 
 #[get("/lottery/{user_id}/daily")]
-async fn get_daily_reward(user_id: Path<String>) -> impl Responder {
-    get_reward(user_id, RewardType::Daily).await
+async fn get_daily_reward(user_id: Path<String>, cosmos_db: Data<CosmosDb>) -> impl Responder {
+    get_reward(user_id, RewardType::Daily, cosmos_db).await
 }
 
 #[get("/lottery/{user_id}/weekly")]
-async fn get_weekly_reward(user_id: Path<String>) -> impl Responder {
-    get_reward(user_id, RewardType::Weekly).await
+async fn get_weekly_reward(user_id: Path<String>, cosmos_db: Data<CosmosDb>) -> impl Responder {
+    get_reward(user_id, RewardType::Weekly, cosmos_db).await
 }
 
 #[get("/lottery")]
-async fn get_all_lotteries() -> impl Responder {
-    if let Some(lotteries) = get_documents::<UserLottery, _>(USER_LOTTERIES).await {
+async fn get_all_lotteries(cosmos_db: Data<CosmosDb>) -> impl Responder {
+    if let Some(lotteries) =
+        get_documents::<UserLottery, _>(&cosmos_db.database, USER_LOTTERIES).await
+    {
         HttpResponse::Ok().json(lotteries)
     } else {
         HttpResponse::InternalServerError().json(ServerError::with_message(
@@ -53,7 +56,7 @@ async fn get_all_lotteries() -> impl Responder {
 }
 
 #[get("/lottery/{user_id}")]
-async fn get_user_lotteries(user_id: Path<String>) -> impl Responder {
+async fn get_user_lotteries(user_id: Path<String>, cosmos_db: Data<CosmosDb>) -> impl Responder {
     let query = Query::with_params(
         format!(
             "SELECT * FROM {} u WHERE u.user_id = @user_id",
@@ -63,7 +66,7 @@ async fn get_user_lotteries(user_id: Path<String>) -> impl Responder {
     );
 
     if let Some(query_result) =
-        query_document::<UserLottery, _, _>(USER_LOTTERIES, query, true).await
+        query_document::<UserLottery, _, _>(&cosmos_db.database, USER_LOTTERIES, query, true).await
     {
         let user_lottery = query_result.first().cloned().unwrap_or_default();
         HttpResponse::Ok().json(user_lottery)
@@ -78,6 +81,7 @@ async fn get_user_lotteries(user_id: Path<String>) -> impl Responder {
 async fn add_lottery(
     user_id: Path<String>,
     payload: actix_web::web::Json<UserLotteryUpdateInfo>,
+    cosmos_db: Data<CosmosDb>,
 ) -> impl Responder {
     if payload
         .lotteries
@@ -91,9 +95,8 @@ async fn add_lottery(
 
     let user_id = user_id.into_inner();
     let lottery_count = payload.lotteries.len();
-    let (_client, database) = initialize_clients();
-    let lottery_collection = database.collection_client(USER_LOTTERIES);
-    let credit_collection = database.collection_client(USER_CREDITS);
+    let lottery_collection = cosmos_db.database.collection_client(USER_LOTTERIES);
+    let credit_collection = cosmos_db.database.collection_client(USER_CREDITS);
 
     let query = Query::with_params(
         format!(
@@ -222,7 +225,7 @@ async fn add_lottery(
 }
 
 #[delete("/lottery/{user_id}")]
-async fn delete_lotteries(user_id: Path<String>) -> impl Responder {
+async fn delete_lotteries(user_id: Path<String>, cosmos_db: Data<CosmosDb>) -> impl Responder {
     let user_id = user_id.into_inner();
     let query = Query::with_params(
         format!(
@@ -232,9 +235,10 @@ async fn delete_lotteries(user_id: Path<String>) -> impl Responder {
         vec![Param::new("@user_id".into(), user_id.clone())],
     );
 
-    let query_result = query_document::<UserLottery, _, _>(USER_LOTTERIES, query, true)
-        .await
-        .and_then(|v| v.first().cloned());
+    let query_result =
+        query_document::<UserLottery, _, _>(&cosmos_db.database, USER_LOTTERIES, query, true)
+            .await
+            .and_then(|v| v.first().cloned());
 
     match query_result {
         None => HttpResponse::NotFound().json(ServerError::with_message(
@@ -246,7 +250,7 @@ async fn delete_lotteries(user_id: Path<String>) -> impl Responder {
                 ..user_lottery
             };
 
-            match add_document(USER_LOTTERIES, new_document).await {
+            match add_document(&cosmos_db.database, USER_LOTTERIES, new_document).await {
                 Ok(_) => HttpResponse::NoContent().finish(),
                 Err(e) => {
                     let error_message = format!(
@@ -262,7 +266,11 @@ async fn delete_lotteries(user_id: Path<String>) -> impl Responder {
     }
 }
 
-async fn get_reward(user_id: Path<String>, reward_type: RewardType) -> impl Responder {
+async fn get_reward(
+    user_id: Path<String>,
+    reward_type: RewardType,
+    cosmos_db: Data<CosmosDb>,
+) -> impl Responder {
     let user_id = user_id.into_inner();
     let query = Query::with_params(
         format!(
@@ -272,7 +280,9 @@ async fn get_reward(user_id: Path<String>, reward_type: RewardType) -> impl Resp
         vec![Param::new("@user_id".into(), user_id.clone())],
     );
 
-    match query_document::<UserLottery, _, _>("UserLotteries", query, true).await {
+    match query_document::<UserLottery, _, _>(&cosmos_db.database, "UserLotteries", query, true)
+        .await
+    {
         None => HttpResponse::NotFound().json(ServerError::with_message(
             "The specified user is not found.",
         )),
@@ -286,7 +296,7 @@ async fn get_reward(user_id: Path<String>, reward_type: RewardType) -> impl Resp
                 > OffsetDateTime::parse(&next_reward_time, &Rfc3339)
                     .unwrap_or(OffsetDateTime::UNIX_EPOCH)
             {
-                let response = update_credits(&user_lottery, reward_type).await;
+                let response = update_credits(&user_lottery, reward_type, &cosmos_db).await;
 
                 let new_document = UserLottery {
                     next_daily_time: if reward_type == RewardType::Daily {
@@ -308,7 +318,7 @@ async fn get_reward(user_id: Path<String>, reward_type: RewardType) -> impl Resp
                     ..user_lottery
                 };
 
-                match add_document(USER_LOTTERIES, new_document).await {
+                match add_document(&cosmos_db.database, USER_LOTTERIES, new_document).await {
                     Ok(_) => response,
                     Err(e) => {
                         let error_message = format!("Failed to update next reward time: {}", e);
@@ -324,8 +334,13 @@ async fn get_reward(user_id: Path<String>, reward_type: RewardType) -> impl Resp
     }
 }
 
-async fn update_credits(user_lottery: &UserLottery, reward_type: RewardType) -> HttpResponse {
+async fn update_credits(
+    user_lottery: &UserLottery,
+    reward_type: RewardType,
+    cosmos_db: &Data<CosmosDb>,
+) -> HttpResponse {
     adjust_credit(
+        &cosmos_db.database,
         user_lottery.user_id.clone(),
         UserCreditUpdateInfo {
             credit: match reward_type {

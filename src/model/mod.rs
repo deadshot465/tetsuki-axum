@@ -1,5 +1,6 @@
 pub mod claim;
 pub mod configuration;
+pub mod cosmos_db;
 pub mod dialog_info;
 pub mod errors;
 pub mod games;
