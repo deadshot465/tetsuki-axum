@@ -1,4 +1,5 @@
 use crate::controller::credit_controller::USER_CREDITS;
+use crate::model::cosmos_db::CosmosDb;
 use crate::model::errors::ServerError;
 use crate::model::user_credit::{UserCredit, UserCreditUpdateInfo, UserCreditUpdateOpt};
 use crate::CONFIGURATION;
@@ -8,12 +9,11 @@ use futures::StreamExt;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-pub async fn get_documents<T, S>(collection_name: S) -> Option<Vec<T>>
+pub async fn get_documents<T, S>(database: &DatabaseClient, collection_name: S) -> Option<Vec<T>>
 where
     T: DeserializeOwned + Send + Sync + Clone,
     S: Into<std::borrow::Cow<'static, str>>,
 {
-    let (_client, database) = initialize_clients();
     let collection = database.collection_client(collection_name);
 
     let documents = collection
@@ -37,6 +37,7 @@ where
 }
 
 pub async fn query_document<T, S, Q>(
+    database: &DatabaseClient,
     collection_name: S,
     query: Q,
     cross_partition: bool,
@@ -46,7 +47,6 @@ where
     S: Into<std::borrow::Cow<'static, str>>,
     Q: Into<Query>,
 {
-    let (_client, database) = initialize_clients();
     let collection = database.collection_client(collection_name);
     query_document_within_collection(&collection, query, cross_partition).await
 }
@@ -94,6 +94,7 @@ where
 }
 
 pub async fn add_document<S, D>(
+    database: &DatabaseClient,
     collection_name: S,
     new_document: D,
 ) -> Result<CreateDocumentResponse, azure_core::error::Error>
@@ -101,7 +102,6 @@ where
     S: Into<std::borrow::Cow<'static, str>>,
     D: Serialize + CosmosEntity + Send + 'static,
 {
-    let (_client, database) = initialize_clients();
     let collection = database.collection_client(collection_name);
 
     add_document_into_collection(&collection, new_document).await
@@ -119,11 +119,11 @@ pub async fn add_document_into_collection<D: Serialize + CosmosEntity + Send + '
 }
 
 pub async fn adjust_credit(
+    database: &DatabaseClient,
     user_id: String,
     request: UserCreditUpdateInfo,
     opt: UserCreditUpdateOpt,
 ) -> HttpResponse {
-    let (_client, database) = initialize_clients();
     let collection = database.collection_client(USER_CREDITS);
     adjust_credit_in_collection(&collection, user_id, request, opt).await
 }
@@ -169,7 +169,7 @@ pub async fn adjust_credit_in_collection(
     }
 }
 
-pub fn initialize_clients() -> (CosmosClient, DatabaseClient) {
+pub fn initialize_clients() -> CosmosDb {
     let authorization_token =
         AuthorizationToken::primary_from_base64(&CONFIGURATION.cosmos_db_primary_key)
             .map_err(|e| log::error!("Failed to generate authorization token for CosmosDB: {}", e))
@@ -182,5 +182,5 @@ pub fn initialize_clients() -> (CosmosClient, DatabaseClient) {
     );
 
     let database = client.database_client(&CONFIGURATION.cosmos_db_database_name);
-    (client, database)
+    CosmosDb { client, database }
 }

@@ -5,9 +5,9 @@ use crate::controller::lottery_controller::config_lottery_controller;
 use crate::controller::mal_character_controller::config_mal_character_controller;
 use crate::controller::record_controller::config_record_controller;
 use crate::controller::roll_controller::config_roll_controller;
-use crate::db::initialize_db;
 use crate::middleware::authentication::Authentication;
 use crate::shared::configuration::CONFIGURATION;
+use crate::shared::util::initialize_clients;
 use actix_web::web::Data;
 use actix_web::{App, HttpServer};
 use env_logger::Builder;
@@ -43,9 +43,10 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .wrap(Authentication)
-            .app_data(Data::new(
+            /*.app_data(Data::new(
                 initialize_db().expect("Failed to initialize database connection."),
-            ))
+            ))*/
+            .app_data(Data::new(initialize_clients()))
             .configure(config_credit_controller)
             .configure(config_dialog_controller)
             .configure(config_record_controller)
