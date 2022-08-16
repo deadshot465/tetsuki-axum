@@ -9,7 +9,7 @@ use crate::middleware::authentication::Authentication;
 use crate::shared::configuration::CONFIGURATION;
 use crate::shared::util::initialize_clients;
 use actix_web::web::Data;
-use actix_web::{App, HttpServer};
+use actix_web::{App, HttpResponse, HttpServer};
 use env_logger::Builder;
 use log::LevelFilter;
 
@@ -53,6 +53,18 @@ async fn main() -> std::io::Result<()> {
             .configure(config_lottery_controller)
             .configure(config_mal_character_controller)
             .configure(config_roll_controller)
+            .route(
+                "/morenatsu",
+                actix_web::web::get().to(|| HttpResponse::Gone()),
+            )
+            .route(
+                "/morenatsu/homecoming",
+                actix_web::web::get().to(|| HttpResponse::Gone()),
+            )
+            .route(
+                "/homecoming",
+                actix_web::web::get().to(|| HttpResponse::Gone()),
+            )
             .service(login)
             .service(actix_files::Files::new("/asset/dialog", "./asset/dialog"))
     })
