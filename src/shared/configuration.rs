@@ -33,8 +33,8 @@ fn initialize() -> anyhow::Result<Configuration> {
         std::fs::write(&configuration_path, &serialized_toml)?;
         Ok(configuration)
     } else {
-        let toml = std::fs::read(&configuration_path)?;
-        let deserialized_toml = toml::from_slice::<Configuration>(&toml)?;
+        let toml = std::fs::read_to_string(&configuration_path)?;
+        let deserialized_toml = toml::from_str::<Configuration>(&toml)?;
         Ok(deserialized_toml)
     }
 }

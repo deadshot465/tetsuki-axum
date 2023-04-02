@@ -2,7 +2,7 @@ use crate::model::dialog_info::DialogInfo;
 use crate::shared::configuration::CONFIGURATION;
 use once_cell::sync::OnceCell;
 use thirtyfour::prelude::*;
-use thirtyfour::{ChromeCapabilities, OptionRect};
+use thirtyfour::ChromeCapabilities;
 
 static CAPABILITIES: OnceCell<ChromeCapabilities> = OnceCell::new();
 static WEB_DRIVER: OnceCell<WebDriver> = OnceCell::new();
@@ -20,7 +20,7 @@ pub async fn get_dialog(dialog_info: DialogInfo) -> anyhow::Result<Vec<u8>> {
     initialize().await?;
     if let Some(driver) = WEB_DRIVER.get() {
         driver
-            .get(String::from(&CONFIGURATION.server_address) + DIALOG_TEMPLATE_FILE_NAME)
+            .goto(String::from(&CONFIGURATION.server_address) + DIALOG_TEMPLATE_FILE_NAME)
             .await?;
 
         let sanitized_text = dialog_info
@@ -35,7 +35,7 @@ pub async fn get_dialog(dialog_info: DialogInfo) -> anyhow::Result<Vec<u8>> {
             .replace("{background}", &dialog_info.background)
             .replace("{character}", &dialog_info.character);
 
-        driver.execute_script(&script).await?;
+        driver.execute(&script, vec![]).await?;
         let screenshot = driver.screenshot_as_png().await?;
         Ok(screenshot)
     } else {
@@ -62,13 +62,11 @@ async fn initialize() -> anyhow::Result<()> {
         let width = 810.0_f32 * (dialog_quality / 100.0);
         let height = 1080.0_f32 * (dialog_quality / 100.0);
         driver
-            .set_window_rect(
-                OptionRect::new().with_size(width.round() as i32, height.round() as i32),
-            )
+            .set_window_rect(0, 0, width.round() as u32, height.round() as u32)
             .await?;
         WEB_DRIVER
             .set(driver)
-            .expect("Failed to set web driver's OnceCell.");
+            .map_err(|_| anyhow::anyhow!("Failed to set web driver's OnceCell."))?;
     }
     Ok(())
 }

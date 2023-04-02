@@ -1,100 +1,80 @@
 #![allow(clippy::type_complexity)]
+
 use crate::model::claim::Claim;
+use crate::model::errors::{ApiError, ServerError};
 use crate::shared::configuration::CONFIGURATION;
-use actix_service::{Service, Transform};
-use actix_web::dev::{ServiceRequest, ServiceResponse};
-use actix_web::{Error, HttpResponse};
-use futures::prelude::future::{ok, Ready};
-use futures::Future;
+use axum::extract::FromRequestParts;
+use axum::headers::authorization::Bearer;
+use axum::headers::Authorization;
+use axum::http::request::Parts;
+use axum::http::StatusCode;
+use axum::{async_trait, Json, RequestPartsExt, TypedHeader};
 use jsonwebtoken::{decode, DecodingKey, Validation};
 use once_cell::sync::OnceCell;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 use time::OffsetDateTime;
 
 static ANONYMOUS_ENDPOINTS: OnceCell<Vec<String>> = OnceCell::new();
 
-pub struct Authentication;
+#[async_trait]
+impl<S> FromRequestParts<S> for Claim {
+    type Rejection = ApiError;
 
-impl<S> Transform<S, ServiceRequest> for Authentication
-where
-    S: Service<ServiceRequest, Error = Error, Response = ServiceResponse>,
-    S::Future: 'static,
-{
-    type Response = ServiceResponse;
-    type Error = Error;
-    type Transform = AuthenticationMiddleware<S>;
-    type InitError = ();
-    type Future = Ready<Result<Self::Transform, Self::InitError>>;
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let TypedHeader(Authorization(bearer)) = parts
+            .extract::<TypedHeader<Authorization<Bearer>>>()
+            .await
+            .map_err(|_e| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json(ServerError {
+                        error_message: "Invalid token".to_string(),
+                    }),
+                )
+            })?;
 
-    fn new_transform(&self, service: S) -> Self::Future {
-        ok(AuthenticationMiddleware { service })
-    }
-}
+        let secret = &CONFIGURATION.jwt_secret;
 
-pub struct AuthenticationMiddleware<S> {
-    service: S,
-}
-
-impl<S> Service<ServiceRequest> for AuthenticationMiddleware<S>
-where
-    S: Service<ServiceRequest, Error = Error, Response = ServiceResponse>,
-    S::Future: 'static,
-{
-    type Response = ServiceResponse;
-    type Error = Error;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
-
-    fn poll_ready(&self, ctx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.service.poll_ready(ctx)
-    }
-
-    fn call(&self, req: ServiceRequest) -> Self::Future {
-        let mut authentication_pass = false;
-        let anonymous_endpoints = ANONYMOUS_ENDPOINTS.get_or_init(|| {
-            let raw_data = std::fs::read("asset/anonymous_endpoints.json")
-                .expect("Failed to read anonymous endpoints from assets.");
-            serde_json::from_slice(&raw_data).expect("Failed to deserialize JSON file.")
-        });
-        let path = req.path();
-        if anonymous_endpoints.iter().any(|s| path.starts_with(&*s)) {
-            authentication_pass = true;
-        } else if let Some(header) = req.headers().get("Authorization") {
-            let header_value = header.to_str().unwrap_or_default();
-            if let Some(token) = header_value.strip_prefix("Bearer") {
-                let token = token.trim();
-                let secret = &CONFIGURATION.jwt_secret;
-                if let Ok(token) = decode::<Claim>(
-                    token,
-                    &DecodingKey::from_secret(secret.as_bytes()),
-                    &Validation::default(),
-                ) {
-                    log::info!("{:?}", &token.claims);
-                    match OffsetDateTime::from_unix_timestamp(token.claims.exp as i64) {
-                        Ok(expiry) => {
-                            if expiry > OffsetDateTime::now_utc() {
-                                authentication_pass = true;
-                            }
-                        }
-                        Err(e) => {
-                            log::error!(
-                                "Failed to retrieve token expiration data from timestamp: {}",
-                                e
-                            );
-                        }
+        if let Ok(token) = decode::<Claim>(
+            bearer.token(),
+            &DecodingKey::from_secret(secret.as_bytes()),
+            &Validation::default(),
+        ) {
+            tracing::info!("{:?}", &token.claims);
+            match OffsetDateTime::from_unix_timestamp(token.claims.exp as i64) {
+                Ok(expiry) => {
+                    if expiry > OffsetDateTime::now_utc() {
+                        Ok(token.claims)
+                    } else {
+                        Err((
+                            StatusCode::BAD_REQUEST,
+                            Json(ServerError {
+                                error_message: "Token expired.".to_string(),
+                            }),
+                        ))
                     }
                 }
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to retrieve token expiration data from timestamp: {}",
+                        e
+                    );
+                    Err((
+                        StatusCode::BAD_REQUEST,
+                        Json(ServerError {
+                            error_message:
+                                "Failed to retrieve token expiration data from timestamp."
+                                    .to_string(),
+                        }),
+                    ))
+                }
             }
-        }
-
-        if authentication_pass {
-            let future = self.service.call(req);
-            Box::pin(async move {
-                let response = future.await?;
-                Ok(response)
-            })
         } else {
-            Box::pin(async move { Ok(req.into_response(HttpResponse::Unauthorized())) })
+            Err((
+                StatusCode::UNAUTHORIZED,
+                Json(ServerError {
+                    error_message: "Unauthorized".to_string(),
+                }),
+            ))
         }
     }
 }

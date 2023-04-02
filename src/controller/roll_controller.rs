@@ -1,79 +1,85 @@
 use crate::controller::mal_character_controller::{inner_get_all_mal_characters, MAL_CHARACTERS};
+use crate::model::app_state::AppState;
 use crate::model::cosmos_db::CosmosDb;
 use crate::model::errors::ServerError;
 use crate::model::user_roll::{GetRollResult, UserRoll};
 use crate::shared::util::{add_document, get_documents, query_document_within_collection};
-use actix_web::web::{Data, Path, ServiceConfig};
-use actix_web::{get, post, HttpResponse, Responder};
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+use axum::Json;
 use azure_data_cosmos::prelude::{CollectionClient, Param, Query};
 use uuid::Uuid;
 
 const USER_ROLLS: &str = "UserRolls";
 
-pub fn config_roll_controller(cfg: &mut ServiceConfig) {
-    cfg.service(post_user_roll)
-        .service(get_all_rolls)
-        .service(get_all_user_rolls)
-        .service(get_user_roll_by_id);
-}
-
-#[post("/user_roll/{user_id}/new")]
-async fn post_user_roll(
+pub async fn post_user_roll(
     _user_id: Path<String>,
-    payload: actix_web::web::Json<UserRoll>,
-    cosmos_db: Data<CosmosDb>,
-) -> impl Responder {
-    let mut payload = payload.into_inner();
+    State(state): State<AppState>,
+    Json(mut payload): Json<UserRoll>,
+) -> Response {
+    let cosmos_db = state.cosmos_db;
     if payload.id.is_empty() {
         payload.id = Uuid::new_v4().to_string();
     }
 
     match add_document(&cosmos_db.database, USER_ROLLS, payload.clone()).await {
-        Ok(_) => HttpResponse::Created().json(payload),
+        Ok(_) => (StatusCode::CREATED, Json(payload)).into_response(),
         Err(e) => {
             let error_message = format!("Failed to insert user roll into database: {}", e);
-            log::error!("{}", &error_message);
-            HttpResponse::InternalServerError().json(ServerError::with_message(error_message))
+            tracing::error!("{}", &error_message);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ServerError::with_message(error_message)),
+            )
+                .into_response()
         }
     }
 }
 
-#[get("/user_roll")]
-async fn get_all_rolls(cosmos_db: Data<CosmosDb>) -> impl Responder {
+pub async fn get_all_rolls(State(state): State<AppState>) -> Response {
+    let cosmos_db = state.cosmos_db;
     let query_result = get_documents::<UserRoll, _>(&cosmos_db.database, USER_ROLLS)
         .await
         .unwrap_or_default();
-    HttpResponse::Ok().json(query_result)
+    (StatusCode::OK, Json(query_result)).into_response()
 }
 
-#[get("/user_roll/{user_id}")]
-async fn get_all_user_rolls(user_id: Path<String>, cosmos_db: Data<CosmosDb>) -> impl Responder {
-    let query_result = inner_get_all_user_rolls_with_names(user_id.into_inner(), cosmos_db).await;
-    HttpResponse::Ok().json(query_result)
+pub async fn get_all_user_rolls(
+    Path(user_id): Path<String>,
+    State(state): State<AppState>,
+) -> Response {
+    let cosmos_db = state.cosmos_db;
+    let query_result = inner_get_all_user_rolls_with_names(user_id, cosmos_db).await;
+    (StatusCode::OK, Json(query_result)).into_response()
 }
 
-#[get("/user_roll/{user_id}/{roll_id}")]
-async fn get_user_roll_by_id(
-    path: Path<(String, i32)>,
-    cosmos_db: Data<CosmosDb>,
-) -> impl Responder {
-    let (user_id, roll_id) = path.into_inner();
+pub async fn get_user_roll_by_id(
+    Path(user_id): Path<String>,
+    Path(roll_id): Path<i32>,
+    State(state): State<AppState>,
+) -> Response {
+    let cosmos_db = state.cosmos_db;
     let all_user_rolls_with_names = inner_get_all_user_rolls_with_names(user_id, cosmos_db).await;
     let result = all_user_rolls_with_names
         .into_iter()
         .find(|res| res.user_roll.roll_id == roll_id);
 
     match result {
-        Some(res) => HttpResponse::Ok().json(res),
-        None => HttpResponse::NotFound().json(ServerError::with_message(
-            "Cannot find the specified roll within user's rolls.",
-        )),
+        Some(res) => (StatusCode::OK, Json(res)).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ServerError::with_message(
+                "Cannot find the specified roll within user's rolls.",
+            )),
+        )
+            .into_response(),
     }
 }
 
 async fn inner_get_all_user_rolls_with_names(
     user_id: String,
-    cosmos_db: Data<CosmosDb>,
+    cosmos_db: CosmosDb,
 ) -> Vec<GetRollResult> {
     let roll_collection = cosmos_db.database.collection_client(USER_ROLLS);
     let mal_character_collection = cosmos_db.database.collection_client(MAL_CHARACTERS);
