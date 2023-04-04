@@ -14,4 +14,6 @@ pub struct Configuration {
     pub cosmos_db_primary_key: String,
     pub cosmos_db_database_name: String,
     pub cosmos_db_account: String,
+    pub swc_publication_endpoints: Vec<String>,
+    pub swc_check_interval: i32,
 }

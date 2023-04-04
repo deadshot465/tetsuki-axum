@@ -1,4 +1,5 @@
 use crate::model::app_state::AppState;
+use crate::model::claim::Claim;
 use crate::model::errors::ServerError;
 use crate::model::user_credit::{UserCredit, UserCreditUpdateInfo, UserCreditUpdateOpt};
 use axum::extract::{Path, State};
@@ -13,7 +14,7 @@ use crate::shared::util::{
 
 pub const USER_CREDITS: &str = "UserCredits";
 
-pub async fn get_all_user_credits(State(state): State<AppState>) -> Response {
+pub async fn get_all_user_credits(_claim: Claim, State(state): State<AppState>) -> Response {
     let cosmos_db = state.cosmos_db;
 
     if let Some(credits) = get_documents::<UserCredit, _>(&cosmos_db.database, USER_CREDITS).await {
@@ -30,6 +31,7 @@ pub async fn get_all_user_credits(State(state): State<AppState>) -> Response {
 }
 
 pub async fn get_single_user_credits(
+    _claim: Claim,
     Path(user_id): Path<String>,
     State(state): State<AppState>,
 ) -> Response {
@@ -63,6 +65,7 @@ pub async fn get_single_user_credits(
 }
 
 pub async fn add_user(
+    _claim: Claim,
     State(state): State<AppState>,
     Json(user_credit): Json<UserCredit>,
 ) -> Response {
@@ -121,6 +124,7 @@ pub async fn add_user(
 }
 
 pub async fn add_credit(
+    _claim: Claim,
     Path(user_id): Path<String>,
     State(state): State<AppState>,
     Json(user_credit): Json<UserCreditUpdateInfo>,
@@ -136,6 +140,7 @@ pub async fn add_credit(
 }
 
 pub async fn reduce_credit(
+    _claim: Claim,
     Path(user_id): Path<String>,
     State(state): State<AppState>,
     Json(user_credit): Json<UserCreditUpdateInfo>,
@@ -150,7 +155,11 @@ pub async fn reduce_credit(
     .await
 }
 
-pub async fn delete_user(Path(user_id): Path<String>, State(state): State<AppState>) -> Response {
+pub async fn delete_user(
+    _claim: Claim,
+    Path(user_id): Path<String>,
+    State(state): State<AppState>,
+) -> Response {
     let cosmos_db = state.cosmos_db;
     let collection = cosmos_db.database.collection_client(USER_CREDITS);
 

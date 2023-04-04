@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use axum::http::StatusCode;
 use axum::Json;
 use serde::{Deserialize, Serialize};

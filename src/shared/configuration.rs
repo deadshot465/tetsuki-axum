@@ -28,9 +28,11 @@ fn initialize() -> anyhow::Result<Configuration> {
             cosmos_db_primary_key: std::env::var("COSMOS_DB_PRIMARY_KEY")?,
             cosmos_db_database_name: std::env::var("COSMOS_DB_DATABASE_NAME")?,
             cosmos_db_account: std::env::var("COSMOS_DB_ACCOUNT")?,
+            swc_publication_endpoints: vec![],
+            swc_check_interval: 3,
         };
         let serialized_toml = toml::to_string_pretty(&configuration)?;
-        std::fs::write(&configuration_path, &serialized_toml)?;
+        std::fs::write(&configuration_path, serialized_toml)?;
         Ok(configuration)
     } else {
         let toml = std::fs::read_to_string(&configuration_path)?;

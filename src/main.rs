@@ -15,11 +15,13 @@ use crate::controller::roll_controller::{
 };
 use crate::model::app_state::AppState;
 use crate::shared::configuration::CONFIGURATION;
+use crate::shared::swc_scraper::initialize_scraper;
 use crate::shared::util::initialize_clients;
-use axum::routing::{get, patch, post};
+use axum::routing::{get, get_service, patch, post};
 use axum::Router;
 use std::net::SocketAddr;
 use std::str::FromStr;
+use tower_http::services::ServeDir;
 use tracing::Level;
 
 mod controller;
@@ -52,6 +54,10 @@ async fn main() -> anyhow::Result<()> {
         eprintln!("Initializing tracing failed: {}", e);
     }
 
+    tokio::spawn(async move {
+        initialize_scraper().await;
+    });
+
     let state = AppState {
         cosmos_db: initialize_clients(),
     };
@@ -83,6 +89,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/user_roll/:user_id/new", post(post_user_roll))
         .route("/user_roll/:user_id/:roll_id", get(get_user_roll_by_id))
         .route("/login", post(login))
+        .nest_service("/asset", get_service(ServeDir::new("./asset")))
         .with_state(state);
 
     let address = SocketAddr::from_str(&CONFIGURATION.server_bind_point)?;

@@ -1,7 +1,8 @@
+use crate::model::claim::Claim;
 use crate::model::dialog_info::DialogInfo;
 use crate::shared::constants::ASSET_DIRECTORY;
 use crate::shared::web_driver::get_dialog;
-use axum::http::StatusCode;
+use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use once_cell::sync::Lazy;
@@ -13,7 +14,7 @@ const CHARACTERS_PATH: &str = "/dialog/images/characters";
 static BACKGROUNDS_LIST: Lazy<Vec<String>> = Lazy::new(|| build_list(BACKGROUNDS_PATH));
 static CHARACTERS_LIST: Lazy<Vec<String>> = Lazy::new(|| build_list(CHARACTERS_PATH));
 
-pub async fn generate_dialog(Json(dialog_info): Json<DialogInfo>) -> Response {
+pub async fn generate_dialog(_claim: Claim, Json(dialog_info): Json<DialogInfo>) -> Response {
     if !CHARACTERS_LIST.contains(&dialog_info.character)
         || !BACKGROUNDS_LIST.contains(&dialog_info.background)
         || dialog_info.text.is_empty()
@@ -26,7 +27,14 @@ pub async fn generate_dialog(Json(dialog_info): Json<DialogInfo>) -> Response {
     }
 
     match get_dialog(dialog_info).await {
-        Ok(result) => (StatusCode::OK, result).into_response(),
+        Ok(result) => (
+            [(
+                axum::http::header::CONTENT_TYPE,
+                HeaderValue::from_static("image/png"),
+            )],
+            result,
+        )
+            .into_response(),
         Err(e) => {
             tracing::error!("An error occurred when generating the dialog: {}", e);
             (StatusCode::BAD_REQUEST, e.to_string()).into_response()

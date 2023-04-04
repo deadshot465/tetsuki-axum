@@ -1,5 +1,6 @@
 use crate::controller::credit_controller::USER_CREDITS;
 use crate::model::app_state::AppState;
+use crate::model::claim::Claim;
 use crate::model::cosmos_db::CosmosDb;
 use crate::model::errors::ServerError;
 use crate::model::lottery::{UserLottery, UserLotteryUpdateInfo};
@@ -27,6 +28,7 @@ enum RewardType {
 }
 
 pub async fn get_daily_reward(
+    _claim: Claim,
     Path(user_id): Path<String>,
     State(state): State<AppState>,
 ) -> Response {
@@ -35,6 +37,7 @@ pub async fn get_daily_reward(
 }
 
 pub async fn get_weekly_reward(
+    _claim: Claim,
     Path(user_id): Path<String>,
     State(state): State<AppState>,
 ) -> Response {
@@ -42,7 +45,7 @@ pub async fn get_weekly_reward(
     get_reward(user_id, RewardType::Weekly, cosmos_db).await
 }
 
-pub async fn get_all_lotteries(State(state): State<AppState>) -> Response {
+pub async fn get_all_lotteries(_claim: Claim, State(state): State<AppState>) -> Response {
     let cosmos_db = state.cosmos_db;
     if let Some(lotteries) =
         get_documents::<UserLottery, _>(&cosmos_db.database, USER_LOTTERIES).await
@@ -60,6 +63,7 @@ pub async fn get_all_lotteries(State(state): State<AppState>) -> Response {
 }
 
 pub async fn get_user_lotteries(
+    _claim: Claim,
     Path(user_id): Path<String>,
     State(state): State<AppState>,
 ) -> Response {
@@ -89,6 +93,7 @@ pub async fn get_user_lotteries(
 }
 
 pub async fn add_lottery(
+    _claim: Claim,
     Path(user_id): Path<String>,
     State(state): State<AppState>,
     Json(mut payload): Json<UserLotteryUpdateInfo>,
@@ -252,6 +257,7 @@ pub async fn add_lottery(
 }
 
 pub async fn delete_lotteries(
+    _claim: Claim,
     Path(user_id): Path<String>,
     State(state): State<AppState>,
 ) -> Response {

@@ -1,5 +1,6 @@
 use crate::controller::mal_character_controller::{inner_get_all_mal_characters, MAL_CHARACTERS};
 use crate::model::app_state::AppState;
+use crate::model::claim::Claim;
 use crate::model::cosmos_db::CosmosDb;
 use crate::model::errors::ServerError;
 use crate::model::user_roll::{GetRollResult, UserRoll};
@@ -14,6 +15,7 @@ use uuid::Uuid;
 const USER_ROLLS: &str = "UserRolls";
 
 pub async fn post_user_roll(
+    _claim: Claim,
     _user_id: Path<String>,
     State(state): State<AppState>,
     Json(mut payload): Json<UserRoll>,
@@ -37,7 +39,7 @@ pub async fn post_user_roll(
     }
 }
 
-pub async fn get_all_rolls(State(state): State<AppState>) -> Response {
+pub async fn get_all_rolls(_claim: Claim, State(state): State<AppState>) -> Response {
     let cosmos_db = state.cosmos_db;
     let query_result = get_documents::<UserRoll, _>(&cosmos_db.database, USER_ROLLS)
         .await
@@ -46,6 +48,7 @@ pub async fn get_all_rolls(State(state): State<AppState>) -> Response {
 }
 
 pub async fn get_all_user_rolls(
+    _claim: Claim,
     Path(user_id): Path<String>,
     State(state): State<AppState>,
 ) -> Response {
@@ -55,6 +58,7 @@ pub async fn get_all_user_rolls(
 }
 
 pub async fn get_user_roll_by_id(
+    _claim: Claim,
     Path(user_id): Path<String>,
     Path(roll_id): Path<i32>,
     State(state): State<AppState>,

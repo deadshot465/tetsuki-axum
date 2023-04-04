@@ -10,10 +10,7 @@ use axum::http::request::Parts;
 use axum::http::StatusCode;
 use axum::{async_trait, Json, RequestPartsExt, TypedHeader};
 use jsonwebtoken::{decode, DecodingKey, Validation};
-use once_cell::sync::OnceCell;
 use time::OffsetDateTime;
-
-static ANONYMOUS_ENDPOINTS: OnceCell<Vec<String>> = OnceCell::new();
 
 #[async_trait]
 impl<S> FromRequestParts<S> for Claim {
@@ -25,9 +22,9 @@ impl<S> FromRequestParts<S> for Claim {
             .await
             .map_err(|_e| {
                 (
-                    StatusCode::BAD_REQUEST,
+                    StatusCode::UNAUTHORIZED,
                     Json(ServerError {
-                        error_message: "Invalid token".to_string(),
+                        error_message: "Authorization header not found".to_string(),
                     }),
                 )
             })?;
@@ -46,9 +43,9 @@ impl<S> FromRequestParts<S> for Claim {
                         Ok(token.claims)
                     } else {
                         Err((
-                            StatusCode::BAD_REQUEST,
+                            StatusCode::UNAUTHORIZED,
                             Json(ServerError {
-                                error_message: "Token expired.".to_string(),
+                                error_message: "Token expired".to_string(),
                             }),
                         ))
                     }

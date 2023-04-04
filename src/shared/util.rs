@@ -18,7 +18,7 @@ where
 {
     let collection = database.collection_client(collection_name);
 
-    let documents = collection
+    collection
         .list_documents()
         .into_stream::<T>()
         .collect::<Vec<_>>()
@@ -34,8 +34,7 @@ where
                 .into_iter()
                 .map(|document| document.document)
                 .collect::<Vec<_>>()
-        });
-    documents
+        })
 }
 
 pub async fn query_document<T, S, Q>(
@@ -81,15 +80,7 @@ where
                 .collect()
         });
 
-    if let Some(document) = documents {
-        if document.is_empty() {
-            None
-        } else {
-            Some(document)
-        }
-    } else {
-        None
-    }
+    documents.filter(|document| !document.is_empty())
 }
 
 pub async fn add_document<S, D>(

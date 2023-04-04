@@ -7,5 +7,6 @@ pub mod errors;
 pub mod login_info;
 pub mod lottery;
 pub mod mal_character;
+pub mod swc;
 pub mod user_credit;
 pub mod user_roll;

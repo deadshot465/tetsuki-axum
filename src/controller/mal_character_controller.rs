@@ -1,4 +1,5 @@
 use crate::model::app_state::AppState;
+use crate::model::claim::Claim;
 use crate::model::errors::ServerError;
 use crate::model::mal_character::MalCharacter;
 use crate::shared::util::{add_document, query_document, query_document_within_collection};
@@ -18,14 +19,18 @@ pub async fn inner_get_all_mal_characters(collection: &CollectionClient) -> Vec<
         .unwrap_or_default()
 }
 
-pub async fn get_all_mal_characters(State(state): State<AppState>) -> Response {
+pub async fn get_all_mal_characters(_claim: Claim, State(state): State<AppState>) -> Response {
     let cosmos_db = state.cosmos_db;
     let collection = cosmos_db.database.collection_client(MAL_CHARACTERS);
     let query_result = inner_get_all_mal_characters(&collection).await;
     (StatusCode::OK, Json(query_result)).into_response()
 }
 
-pub async fn get_mal_character(Path(id): Path<i32>, State(state): State<AppState>) -> Response {
+pub async fn get_mal_character(
+    _claim: Claim,
+    Path(id): Path<i32>,
+    State(state): State<AppState>,
+) -> Response {
     let cosmos_db = state.cosmos_db;
     let query = Query::with_params(
         "SELECT * FROM MalCharacters m WHERE m.Id = @id".into(),
@@ -50,6 +55,7 @@ pub async fn get_mal_character(Path(id): Path<i32>, State(state): State<AppState
 }
 
 pub async fn post_mal_character(
+    _claim: Claim,
     State(state): State<AppState>,
     Json(mut payload): Json<MalCharacter>,
 ) -> Response {

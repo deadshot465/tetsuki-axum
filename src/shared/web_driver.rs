@@ -23,12 +23,7 @@ pub async fn get_dialog(dialog_info: DialogInfo) -> anyhow::Result<Vec<u8>> {
             .goto(String::from(&CONFIGURATION.server_address) + DIALOG_TEMPLATE_FILE_NAME)
             .await?;
 
-        let sanitized_text = dialog_info
-            .text
-            .replace("$", "")
-            .replace("{", "")
-            .replace("}", "")
-            .replace("`", "");
+        let sanitized_text = dialog_info.text.replace(['$', '{', '}', '`'], "");
 
         let script = DIALOG_SCRIPT
             .replace("{text}", &sanitized_text)
