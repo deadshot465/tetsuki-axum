@@ -18,4 +18,4 @@ WantedBy=multi-user.target
 EOF
 
 nohup chromedriver --port=65535 &>/dev/null &
-./tetsuki-actix
+./tetsuki-axum
