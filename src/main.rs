@@ -15,6 +15,9 @@ use crate::controller::roll_controller::{
 };
 use crate::model::app_state::AppState;
 use crate::shared::configuration::CONFIGURATION;
+use crate::shared::swc_notifier::{
+    initialize_slime_notification, initialize_tartarus_notification,
+};
 use crate::shared::swc_scraper::initialize_scraper;
 use crate::shared::util::initialize_clients;
 use axum::routing::{get, get_service, patch, post};
@@ -56,6 +59,14 @@ async fn main() -> anyhow::Result<()> {
 
     tokio::spawn(async move {
         initialize_scraper().await;
+    });
+
+    tokio::spawn(async move {
+        initialize_tartarus_notification().await;
+    });
+
+    tokio::spawn(async move {
+        initialize_slime_notification().await;
     });
 
     let state = AppState {

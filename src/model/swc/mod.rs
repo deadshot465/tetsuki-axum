@@ -61,3 +61,16 @@ pub struct LocalizedResource {
     pub quantity: i32,
     pub label: String,
 }
+
+#[derive(Deserialize, Serialize, Debug, Copy, Clone)]
+pub enum DungeonType {
+    Tartarus,
+    SlimePhaseOne,
+    SlimePhaseTwo,
+}
+
+#[derive(Deserialize, Serialize, Debug, Copy, Clone)]
+#[serde(tag = "type")]
+pub enum SwcPushMessage {
+    DungeonNotification { dungeon_type: DungeonType },
+}

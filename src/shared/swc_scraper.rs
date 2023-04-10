@@ -1,13 +1,13 @@
 use crate::model::swc::{LocalizedCoupon, LocalizedResource, Payload};
 use crate::shared::configuration::CONFIGURATION;
-use once_cell::sync::{Lazy, OnceCell};
+use crate::shared::HTTP_CLIENT;
+use once_cell::sync::OnceCell;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 const SWC_COUPON_WEBSITE_URL: &str = "https://swq.jp/_special/rest/Sw/Coupon";
 
 static RESOURCE_NAME_MAPPING: OnceCell<HashMap<String, String>> = OnceCell::new();
-static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
 
 pub async fn initialize_scraper() {
     let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(
