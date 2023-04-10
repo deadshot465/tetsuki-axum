@@ -37,10 +37,10 @@ pub async fn initialize_slime_notification() {
 async fn schedule_notification(mut next_day: OffsetDateTime, dungeon_type: DungeonType) {
     loop {
         let duration = next_day - OffsetDateTime::now_utc();
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs_f32(
+        let sleep = tokio::time::sleep(tokio::time::Duration::from_secs_f32(
             duration.as_seconds_f32(),
         ));
-        interval.tick().await;
+        sleep.await;
         publish_notification(dungeon_type).await;
         next_day = next_day.add(time::Duration::days(7));
     }
@@ -53,17 +53,17 @@ async fn schedule_two_step_notification(
 ) {
     loop {
         let duration = next_day - OffsetDateTime::now_utc();
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs_f32(
+        let sleep = tokio::time::sleep(tokio::time::Duration::from_secs_f32(
             duration.as_seconds_f32(),
         ));
-        interval.tick().await;
+        sleep.await;
         publish_notification(first_dungeon_type).await;
         next_day = next_day.add(time::Duration::hours(12));
         let duration = next_day - OffsetDateTime::now_utc();
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs_f32(
+        let sleep = tokio::time::sleep(tokio::time::Duration::from_secs_f32(
             duration.as_seconds_f32(),
         ));
-        interval.tick().await;
+        sleep.await;
         publish_notification(second_dungeon_type).await;
         next_day = next_day.add(time::Duration::days(7));
     }
