@@ -1,3 +1,8 @@
+use axum::routing::{get, get_service, patch, post};
+use axum::Router;
+use tower_http::services::ServeDir;
+use tracing::Level;
+
 use crate::controller::credit_controller::{
     add_credit, add_user, delete_user, get_all_user_credits, get_single_user_credits, reduce_credit,
 };
@@ -20,12 +25,6 @@ use crate::shared::swc_notifier::{
 };
 use crate::shared::swc_scraper::initialize_scraper;
 use crate::shared::util::initialize_clients;
-use axum::routing::{get, get_service, patch, post};
-use axum::Router;
-use std::net::SocketAddr;
-use std::str::FromStr;
-use tower_http::services::ServeDir;
-use tracing::Level;
 
 mod controller;
 mod db;
@@ -101,12 +100,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/user_roll/:user_id/:roll_id", get(get_user_roll_by_id))
         .route("/login", post(login))
         .nest_service("/asset", get_service(ServeDir::new("./asset")))
+        .nest_service("/upload", get_service(ServeDir::new("./upload")))
         .with_state(state);
 
-    let address = SocketAddr::from_str(&CONFIGURATION.server_bind_point)?;
-    axum::Server::bind(&address)
-        .serve(app.into_make_service())
-        .await?;
+    let listener = tokio::net::TcpListener::bind(&CONFIGURATION.server_bind_point).await?;
+    axum::serve(listener, app).await?;
 
     Ok(())
 }

@@ -168,12 +168,9 @@ pub async fn adjust_credit_in_collection(
 }
 
 pub fn initialize_clients() -> CosmosDb {
-    let authorization_token =
-        AuthorizationToken::primary_from_base64(&CONFIGURATION.cosmos_db_primary_key)
-            .map_err(|e| {
-                tracing::error!("Failed to generate authorization token for CosmosDB: {}", e)
-            })
-            .expect("Failed to generate authorization token for CosmosDB.");
+    let authorization_token = AuthorizationToken::primary_key(&CONFIGURATION.cosmos_db_primary_key)
+        .map_err(|e| tracing::error!("Failed to generate authorization token for CosmosDB: {}", e))
+        .expect("Failed to generate authorization token for CosmosDB.");
 
     let client = CosmosClient::new(CONFIGURATION.cosmos_db_account.clone(), authorization_token);
 

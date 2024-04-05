@@ -4,11 +4,12 @@ use crate::model::claim::Claim;
 use crate::model::errors::{ApiError, ServerError};
 use crate::shared::configuration::CONFIGURATION;
 use axum::extract::FromRequestParts;
-use axum::headers::authorization::Bearer;
-use axum::headers::Authorization;
 use axum::http::request::Parts;
 use axum::http::StatusCode;
-use axum::{async_trait, Json, RequestPartsExt, TypedHeader};
+use axum::{async_trait, Json, RequestPartsExt};
+use axum_extra::headers::authorization::Bearer;
+use axum_extra::headers::Authorization;
+use axum_extra::TypedHeader;
 use jsonwebtoken::{decode, DecodingKey, Validation};
 use time::OffsetDateTime;
 
