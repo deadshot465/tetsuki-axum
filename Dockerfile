@@ -8,7 +8,7 @@ WORKDIR /src/target/release
 RUN rm -rf ./build && rm -rf ./deps && rm -rf ./examples && rm -rf ./incremental
 WORKDIR /src
 
-FROM debian:buster-slim
+FROM debian:bookworm-slim
 WORKDIR /root
 RUN apt-get update && \
     apt-get install -y apt-transport-https wget curl gnupg unzip
