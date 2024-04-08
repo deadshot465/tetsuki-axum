@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+use axum::http::StatusCode;
+use axum::Json;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -24,3 +27,7 @@ impl From<&str> for ServerError {
         ServerError::with_message(str)
     }
 }
+
+pub type ApiError = (StatusCode, Json<ServerError>);
+
+pub type ApiResult<T> = Result<T, ApiError>;

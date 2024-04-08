@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::shared::configuration::CONFIGURATION;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Pool, Postgres};

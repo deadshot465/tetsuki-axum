@@ -1,19 +1,16 @@
-use crate::model::cosmos_db::CosmosDb;
+use crate::model::app_state::AppState;
+use crate::model::claim::Claim;
 use crate::model::errors::ServerError;
 use crate::model::mal_character::MalCharacter;
 use crate::shared::util::{add_document, query_document, query_document_within_collection};
-use actix_web::web::{Data, Path, ServiceConfig};
-use actix_web::{get, post, HttpResponse, Responder};
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+use axum::Json;
 use azure_data_cosmos::prelude::{CollectionClient, Param, Query};
 use uuid::Uuid;
 
 pub const MAL_CHARACTERS: &str = "MalCharacters";
-
-pub fn config_mal_character_controller(cfg: &mut ServiceConfig) {
-    cfg.service(get_mal_character)
-        .service(post_mal_character)
-        .service(get_all_mal_characters);
-}
 
 pub async fn inner_get_all_mal_characters(collection: &CollectionClient) -> Vec<MalCharacter> {
     let query = Query::new(format!("SELECT * FROM {} m", MAL_CHARACTERS));
@@ -22,16 +19,19 @@ pub async fn inner_get_all_mal_characters(collection: &CollectionClient) -> Vec<
         .unwrap_or_default()
 }
 
-#[get("/mal_character")]
-async fn get_all_mal_characters(cosmos_db: Data<CosmosDb>) -> impl Responder {
+pub async fn get_all_mal_characters(_claim: Claim, State(state): State<AppState>) -> Response {
+    let cosmos_db = state.cosmos_db;
     let collection = cosmos_db.database.collection_client(MAL_CHARACTERS);
     let query_result = inner_get_all_mal_characters(&collection).await;
-    HttpResponse::Ok().json(query_result)
+    (StatusCode::OK, Json(query_result)).into_response()
 }
 
-#[get("/mal_character/{id}")]
-async fn get_mal_character(id: Path<i32>, cosmos_db: Data<CosmosDb>) -> impl Responder {
-    let id = id.into_inner();
+pub async fn get_mal_character(
+    _claim: Claim,
+    Path(id): Path<i32>,
+    State(state): State<AppState>,
+) -> Response {
+    let cosmos_db = state.cosmos_db;
     let query = Query::with_params(
         "SELECT * FROM MalCharacters m WHERE m.Id = @id".into(),
         vec![Param::new("@id".into(), id)],
@@ -43,29 +43,37 @@ async fn get_mal_character(id: Path<i32>, cosmos_db: Data<CosmosDb>) -> impl Res
             .and_then(|v| v.first().cloned());
 
     match query_result {
-        None => HttpResponse::NotFound().json(ServerError::with_message(
-            "The specified mal character is not found.",
-        )),
-        Some(mal_character) => HttpResponse::Ok().json(mal_character),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ServerError::with_message(
+                "The specified mal character is not found.",
+            )),
+        )
+            .into_response(),
+        Some(mal_character) => (StatusCode::OK, Json(mal_character)).into_response(),
     }
 }
 
-#[post("/mal_character")]
-async fn post_mal_character(
-    payload: actix_web::web::Json<MalCharacter>,
-    cosmos_db: Data<CosmosDb>,
-) -> impl Responder {
-    let mut payload = payload.into_inner();
+pub async fn post_mal_character(
+    _claim: Claim,
+    State(state): State<AppState>,
+    Json(mut payload): Json<MalCharacter>,
+) -> Response {
+    let cosmos_db = state.cosmos_db;
     if payload.id.is_empty() {
         payload.id = Uuid::new_v4().to_string()
     }
 
     match add_document(&cosmos_db.database, MAL_CHARACTERS, payload.clone()).await {
-        Ok(_) => HttpResponse::Created().json(payload),
+        Ok(_) => (StatusCode::CREATED, Json(payload)).into_response(),
         Err(e) => {
             let error_message = format!("Failed to insert mal character into database: {}", e);
-            log::error!("{}", &error_message);
-            HttpResponse::InternalServerError().json(ServerError::with_message(error_message))
+            tracing::error!("{}", &error_message);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ServerError::with_message(error_message)),
+            )
+                .into_response()
         }
     }
 }

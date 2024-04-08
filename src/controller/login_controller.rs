@@ -1,26 +1,27 @@
 use crate::model::claim::Claim;
 use crate::model::login_info::{LoginCredential, LoginResponse};
 use crate::shared::configuration::CONFIGURATION;
-use actix_web::{post, HttpResponse, Responder};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+use axum::Json;
 use jsonwebtoken::{encode, EncodingKey, Header};
 use std::ops::Add;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
-#[post("/login")]
-pub async fn login(request: actix_web::web::Json<LoginCredential>) -> impl Responder {
+pub async fn login(Json(login_credential): Json<LoginCredential>) -> Response {
     let user_name = &CONFIGURATION.bot_user_name;
     let password = &CONFIGURATION.bot_user_pass;
-    if user_name == &request.user_name && password == &request.password {
+    if user_name == &login_credential.user_name && password == &login_credential.password {
         let token = generate_jwt_token(user_name);
         let expiry = OffsetDateTime::now_utc().add(time::Duration::hours(1));
         let login_response = LoginResponse {
             token,
             expiry: expiry.format(&Rfc3339).unwrap_or_default(),
         };
-        HttpResponse::Ok().json(&login_response)
+        (StatusCode::OK, Json(login_response)).into_response()
     } else {
-        HttpResponse::Unauthorized().json("".to_string())
+        StatusCode::UNAUTHORIZED.into_response()
     }
 }
 

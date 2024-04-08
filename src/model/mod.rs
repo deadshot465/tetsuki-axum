@@ -1,11 +1,12 @@
+pub mod app_state;
 pub mod claim;
 pub mod configuration;
 pub mod cosmos_db;
 pub mod dialog_info;
 pub mod errors;
-pub mod games;
 pub mod login_info;
 pub mod lottery;
 pub mod mal_character;
+pub mod swc;
 pub mod user_credit;
 pub mod user_roll;

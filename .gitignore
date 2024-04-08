@@ -7,3 +7,4 @@ asset/dialog/**
 asset/dialog.zip
 asset/game/**
 /config
+config.toml
