@@ -18,6 +18,7 @@ use crate::controller::mal_character_controller::{
 use crate::controller::roll_controller::{
     get_all_rolls, get_all_user_rolls, get_user_roll_by_id, post_user_roll,
 };
+use crate::controller::save_file_controller::save_file;
 use crate::model::app_state::AppState;
 use crate::shared::configuration::CONFIGURATION;
 use crate::shared::swc_notifier::{
@@ -99,6 +100,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/user_roll/:user_id/new", post(post_user_roll))
         .route("/user_roll/:user_id/:roll_id", get(get_user_roll_by_id))
         .route("/login", post(login))
+        .route("/save_file", post(save_file))
         .nest_service("/asset", get_service(ServeDir::new("./asset")))
         .nest_service("/upload", get_service(ServeDir::new("./upload")))
         .with_state(state);
