@@ -223,4 +223,18 @@ fn validate_message_info(payload: MessageInfo) -> Result<MessageInfo, ServerErro
                 Ok(p)
             }
         })
+        .and_then(|p| {
+            if p.message.is_empty() {
+                Err(ServerError::with_message("Message cannot be empty."))
+            } else {
+                Ok(p)
+            }
+        })
+        .and_then(|p| {
+            if p.post_at.is_empty() {
+                Err(ServerError::with_message("Post time cannot be empty."))
+            } else {
+                Ok(p)
+            }
+        })
 }
