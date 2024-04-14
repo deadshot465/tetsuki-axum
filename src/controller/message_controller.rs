@@ -1,10 +1,7 @@
 use crate::model::app_state::AppState;
 use crate::model::claim::Claim;
 use crate::model::errors::ServerError;
-use crate::model::message::{
-    GetCompletionRequest, GetCompletionResponse, GetMessageRequest, GetMessageResponse,
-    MessageInfo, MessageRecord, MessageRecordSimple,
-};
+use crate::model::message::{CompletionRecordSimple, GetCompletionRequest, GetCompletionResponse, GetMessageRequest, GetMessageResponse, MessageInfo, MessageRecord, MessageRecordSimple};
 use crate::shared::util::{add_document_into_collection, query_document_within_collection};
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -91,7 +88,10 @@ pub async fn get_completion_records(
                         false
                     }
                 })
-                .map(|rec| rec.message)
+                .map(|rec| CompletionRecordSimple {
+                    message_type: rec.message_type,
+                    message: rec.message,
+                })
                 .collect::<Vec<_>>();
             messages.reverse();
 
