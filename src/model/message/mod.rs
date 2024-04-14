@@ -55,16 +55,16 @@ pub struct GetMessageResponse {
     pub messages: Vec<MessageRecordSimple>,
 }
 
-impl Into<MessageRecord> for MessageInfo {
-    fn into(self) -> MessageRecord {
+impl From<MessageInfo> for MessageRecord {
+    fn from(value: MessageInfo) -> Self {
         MessageRecord {
             id: "".to_string(),
-            bot_id: self.bot_id,
-            user_id: self.user_id,
-            user_name: self.user_name,
-            message: self.message,
-            post_at: self.post_at,
-            channel_id: self.channel_id,
+            bot_id: value.bot_id,
+            user_id: value.user_id,
+            user_name: value.user_name,
+            message: value.message,
+            channel_id: value.channel_id,
+            post_at: value.post_at,
         }
     }
 }
