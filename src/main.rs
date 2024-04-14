@@ -15,6 +15,9 @@ use crate::controller::lottery_controller::{
 use crate::controller::mal_character_controller::{
     get_all_mal_characters, get_mal_character, post_mal_character,
 };
+use crate::controller::message_controller::{
+    get_completion_records, get_message_records, post_completion_record, post_message_record,
+};
 use crate::controller::roll_controller::{
     get_all_rolls, get_all_user_rolls, get_user_roll_by_id, post_user_roll,
 };
@@ -101,6 +104,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/user_roll/:user_id/:roll_id", get(get_user_roll_by_id))
         .route("/login", post(login))
         .route("/save_file", post(save_file))
+        .route("/message/completion/new", post(post_completion_record))
+        .route("/message/completion/list", post(get_completion_records))
+        .route("/message/record/new", post(post_message_record))
+        .route("/message/record/list", post(get_message_records))
         .nest_service("/asset", get_service(ServeDir::new("./asset")))
         .nest_service("/upload", get_service(ServeDir::new("./upload")))
         .with_state(state);
