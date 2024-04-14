@@ -7,6 +7,7 @@ pub struct MessageInfo {
     pub user_id: String,
     pub user_name: Option<String>,
     pub message: String,
+    pub message_type: String,
     pub channel_id: String,
     pub post_at: String,
 }
@@ -18,6 +19,7 @@ pub struct MessageRecord {
     pub user_id: String,
     pub user_name: Option<String>,
     pub message: String,
+    pub message_type: String,
     pub channel_id: String,
     pub post_at: String,
 }
@@ -26,6 +28,12 @@ pub struct MessageRecord {
 pub struct MessageRecordSimple {
     pub user_id: String,
     pub user_name: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct CompletionRecordSimple {
+    pub message_type: String,
     pub message: String,
 }
 
@@ -63,6 +71,7 @@ impl From<MessageInfo> for MessageRecord {
             user_id: value.user_id,
             user_name: value.user_name,
             message: value.message,
+            message_type: value.message_type,
             channel_id: value.channel_id,
             post_at: value.post_at,
         }

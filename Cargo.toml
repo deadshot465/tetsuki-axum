@@ -1,6 +1,6 @@
 [package]
 name = "tetsuki-axum"
-version = "2.3.1"
+version = "2.3.2"
 authors = ["Chehui Chou <deadshot465@gmail.com>"]
 edition = "2021"
 
