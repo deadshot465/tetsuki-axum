@@ -7,6 +7,7 @@ pub struct MessageInfo {
     pub user_id: String,
     pub user_name: Option<String>,
     pub message: String,
+    pub channel_id: String,
     pub post_at: String,
 }
 
@@ -17,11 +18,13 @@ pub struct MessageRecord {
     pub user_id: String,
     pub user_name: Option<String>,
     pub message: String,
+    pub channel_id: String,
     pub post_at: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct MessageRecordSimple {
+    pub user_id: String,
     pub user_name: String,
     pub message: String,
 }
@@ -30,6 +33,7 @@ pub struct MessageRecordSimple {
 pub struct GetCompletionRequest {
     pub bot_id: String,
     pub user_id: String,
+    pub channel_id: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -42,6 +46,7 @@ pub struct GetCompletionResponse {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct GetMessageRequest {
     pub bot_id: String,
+    pub channel_id: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -59,6 +64,7 @@ impl Into<MessageRecord> for MessageInfo {
             user_name: self.user_name,
             message: self.message,
             post_at: self.post_at,
+            channel_id: self.channel_id,
         }
     }
 }

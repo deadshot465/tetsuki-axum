@@ -48,12 +48,13 @@ pub async fn get_completion_records(
 
     let query = Query::with_params(
         format!(
-            "SELECT * FROM {} c WHERE c.user_id = @user_id AND c.bot_id = @bot_id",
+            "SELECT * FROM {} c WHERE c.user_id = @user_id AND c.bot_id = @bot_id AND c.channel_id = @channel_id",
             CHAT_COMPLETION_RECORDS
         ),
         vec![
             Param::new("@user_id".into(), payload.user_id.clone()),
             Param::new("@bot_id".into(), payload.bot_id.clone()),
+            Param::new("@channel_id".into(), payload.channel_id.clone()),
         ],
     );
     let completion_records =
@@ -117,10 +118,13 @@ pub async fn get_message_records(
 
     let query = Query::with_params(
         format!(
-            "SELECT * FROM {} c WHERE c.bot_id = @bot_id",
+            "SELECT * FROM {} c WHERE c.bot_id = @bot_id AND c.channel_id = @channel_id",
             CHAT_MESSAGE_RECORDS
         ),
-        vec![Param::new("@bot_id".into(), payload.bot_id.clone())],
+        vec![
+            Param::new("@bot_id".into(), payload.bot_id.clone()),
+            Param::new("@channel_id".into(), payload.channel_id.clone()),
+        ],
     );
     let message_records =
         query_document_within_collection::<MessageRecord, _>(&message_collection, query, true)
@@ -157,6 +161,7 @@ pub async fn get_message_records(
                     }
                 })
                 .map(|rec| MessageRecordSimple {
+                    user_id: rec.user_id,
                     user_name: rec.user_name.unwrap_or_default(),
                     message: rec.message,
                 })
@@ -218,7 +223,18 @@ fn validate_message_info(payload: MessageInfo) -> Result<MessageInfo, ServerErro
         })
         .and_then(|p| {
             if p.user_id.is_empty() {
-                Err(ServerError::with_message("User id cannot be empty."))
+                Err(ServerError::with_message("User ID cannot be empty."))
+            } else {
+                Ok(p)
+            }
+        })
+        .and_then(|p| {
+            if let Some(ref name) = p.user_name {
+                if name.is_empty() {
+                    Err(ServerError::with_message("User name cannot be empty."))
+                } else {
+                    Ok(p)
+                }
             } else {
                 Ok(p)
             }
@@ -226,6 +242,13 @@ fn validate_message_info(payload: MessageInfo) -> Result<MessageInfo, ServerErro
         .and_then(|p| {
             if p.message.is_empty() {
                 Err(ServerError::with_message("Message cannot be empty."))
+            } else {
+                Ok(p)
+            }
+        })
+        .and_then(|p| {
+            if p.channel_id.is_empty() {
+                Err(ServerError::with_message("Channel ID cannot be empty."))
             } else {
                 Ok(p)
             }
