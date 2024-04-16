@@ -164,6 +164,7 @@ pub async fn get_message_records(
                     user_id: rec.user_id,
                     user_name: rec.user_name.unwrap_or_default(),
                     message: rec.message,
+                    message_type: rec.message_type,
                 })
                 .collect::<Vec<_>>();
             messages.reverse();

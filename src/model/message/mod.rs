@@ -29,6 +29,7 @@ pub struct MessageRecordSimple {
     pub user_id: String,
     pub user_name: String,
     pub message: String,
+    pub message_type: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
