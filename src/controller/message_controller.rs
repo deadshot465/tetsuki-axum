@@ -45,11 +45,12 @@ pub async fn get_completion_records(
 
     let query = Query::with_params(
         format!(
-            "SELECT * FROM {} c WHERE c.user_id = @user_id AND c.bot_id = @bot_id AND c.channel_id = @channel_id",
+            "SELECT * FROM {} c WHERE (c.user_id = @user_id OR c.generated_by = @generated_by) AND c.bot_id = @bot_id AND c.channel_id = @channel_id",
             CHAT_COMPLETION_RECORDS
         ),
         vec![
             Param::new("@user_id".into(), payload.user_id.clone()),
+            Param::new("@generated_by".into(), payload.user_id.clone()),
             Param::new("@bot_id".into(), payload.bot_id.clone()),
             Param::new("@channel_id".into(), payload.channel_id.clone()),
         ],
@@ -91,6 +92,7 @@ pub async fn get_completion_records(
                 .map(|rec| CompletionRecordSimple {
                     message_type: rec.message_type,
                     message: rec.message,
+                    generated_by: rec.generated_by,
                 })
                 .collect::<Vec<_>>();
             messages.reverse();
