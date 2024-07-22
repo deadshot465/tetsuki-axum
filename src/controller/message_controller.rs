@@ -1,28 +1,41 @@
-use crate::model::app_state::AppState;
-use crate::model::claim::Claim;
-use crate::model::errors::ServerError;
-use crate::model::message::{CompletionRecordSimple, GetCompletionRequest, GetCompletionResponse, GetMessageRequest, GetMessageResponse, MessageInfo, MessageRecord, MessageRecordSimple};
-use crate::shared::util::{add_document_into_collection, query_document_within_collection};
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
 use axum::Json;
+use axum::response::{IntoResponse, Response};
 use azure_data_cosmos::prelude::{Param, Query};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+use crate::model::app_state::AppState;
+use crate::model::claim::Claim;
+use crate::model::errors::ServerError;
+use crate::model::message::{
+    CompletionRecordSimple, GetCompletionRequest, GetCompletionResponse, GetMessageRequest,
+    GetMessageResponse, MessageInfo, MessageRecord, MessageRecordSimple,
+};
+use crate::shared::util::{add_document_into_collection, query_document_within_collection};
+
 const CHAT_COMPLETION_RECORDS: &str = "ChatCompletionRecords";
+const CREATIVE_COMPLETION_RECORDS: &str = "CreativeCompletionRecords";
 const CHAT_MESSAGE_RECORDS: &str = "ChatMessageRecords";
 
-const MAX_CONTEXT_WORD_COUNT: usize = 1_000;
+const MAX_CONTEXT_WORD_COUNT: usize = 100_000;
 
-pub async fn post_completion_record(
+pub async fn post_chat_completion_record(
     _claim: Claim,
     state: State<AppState>,
     payload: Json<MessageInfo>,
 ) -> Response {
     post_record(state, payload, CHAT_COMPLETION_RECORDS.into()).await
+}
+
+pub async fn post_creative_completion_record(
+    _claim: Claim,
+    state: State<AppState>,
+    payload: Json<MessageInfo>,
+) -> Response {
+    post_record(state, payload, CREATIVE_COMPLETION_RECORDS.into()).await
 }
 
 pub async fn post_message_record(
@@ -33,81 +46,20 @@ pub async fn post_message_record(
     post_record(state, payload, CHAT_MESSAGE_RECORDS.into()).await
 }
 
-pub async fn get_completion_records(
+pub async fn get_chat_completion_records(
     _claim: Claim,
     State(state): State<AppState>,
     Json(payload): Json<GetCompletionRequest>,
 ) -> Response {
-    let cosmos_db = state.cosmos_db;
-    let completion_collection = cosmos_db
-        .database
-        .collection_client(CHAT_COMPLETION_RECORDS);
+    get_completion_records(state, payload, CHAT_COMPLETION_RECORDS.into()).await
+}
 
-    let query = Query::with_params(
-        format!(
-            "SELECT * FROM {} c WHERE (c.user_id = @user_id OR c.generated_by = @generated_by) AND c.bot_id = @bot_id AND c.channel_id = @channel_id",
-            CHAT_COMPLETION_RECORDS
-        ),
-        vec![
-            Param::new("@user_id".into(), payload.user_id.clone()),
-            Param::new("@generated_by".into(), payload.user_id.clone()),
-            Param::new("@bot_id".into(), payload.bot_id.clone()),
-            Param::new("@channel_id".into(), payload.channel_id.clone()),
-        ],
-    );
-    let completion_records =
-        query_document_within_collection::<MessageRecord, _>(&completion_collection, query, true)
-            .await;
-
-    match completion_records {
-        None => (
-            StatusCode::OK,
-            Json(GetCompletionResponse {
-                bot_id: payload.bot_id,
-                user_id: payload.user_id,
-                messages: vec![],
-            }),
-        )
-            .into_response(),
-        Some(mut records) => {
-            records.sort_by(|rec_1, rec_2| {
-                let rec_1_post_at = OffsetDateTime::parse(&rec_1.post_at, &Rfc3339)
-                    .unwrap_or(OffsetDateTime::UNIX_EPOCH);
-                let rec_2_post_at = OffsetDateTime::parse(&rec_2.post_at, &Rfc3339)
-                    .unwrap_or(OffsetDateTime::UNIX_EPOCH);
-                rec_2_post_at.cmp(&rec_1_post_at)
-            });
-            let mut word_count = 0_usize;
-            let mut messages = records
-                .into_iter()
-                .take_while(|rec| {
-                    let char_count = rec.message.chars().count();
-                    if word_count + char_count <= MAX_CONTEXT_WORD_COUNT {
-                        word_count += char_count;
-                        true
-                    } else {
-                        false
-                    }
-                })
-                .map(|rec| CompletionRecordSimple {
-                    message_type: rec.message_type,
-                    message: rec.message,
-                    generated_by: rec.generated_by,
-                })
-                .collect::<Vec<_>>();
-            messages.reverse();
-
-            (
-                StatusCode::OK,
-                Json(GetCompletionResponse {
-                    bot_id: payload.bot_id,
-                    user_id: payload.user_id,
-                    messages,
-                }),
-            )
-                .into_response()
-        }
-    }
+pub async fn get_creative_completion_records(
+    _claim: Claim,
+    State(state): State<AppState>,
+    Json(payload): Json<GetCompletionRequest>,
+) -> Response {
+    get_completion_records(state, payload, CREATIVE_COMPLETION_RECORDS.into()).await
 }
 
 pub async fn get_message_records(
@@ -212,6 +164,83 @@ async fn post_record(
             }
         }
         Err(e) => (StatusCode::BAD_REQUEST, Json(e)).into_response(),
+    }
+}
+
+async fn get_completion_records(
+    state: AppState,
+    payload: GetCompletionRequest,
+    collection_name: String,
+) -> Response {
+    let cosmos_db = state.cosmos_db;
+    let completion_collection = cosmos_db
+        .database
+        .collection_client(collection_name.clone());
+
+    let query = Query::with_params(
+        format!(
+            "SELECT * FROM {} c WHERE (c.user_id = @user_id OR c.generated_by = @generated_by) AND c.bot_id = @bot_id AND c.channel_id = @channel_id",
+            collection_name,
+        ),
+        vec![
+            Param::new("@user_id".into(), payload.user_id.clone()),
+            Param::new("@generated_by".into(), payload.user_id.clone()),
+            Param::new("@bot_id".into(), payload.bot_id.clone()),
+            Param::new("@channel_id".into(), payload.channel_id.clone()),
+        ],
+    );
+    let completion_records =
+        query_document_within_collection::<MessageRecord, _>(&completion_collection, query, true)
+            .await;
+
+    match completion_records {
+        None => (
+            StatusCode::OK,
+            Json(GetCompletionResponse {
+                bot_id: payload.bot_id,
+                user_id: payload.user_id,
+                messages: vec![],
+            }),
+        )
+            .into_response(),
+        Some(mut records) => {
+            records.sort_by(|rec_1, rec_2| {
+                let rec_1_post_at = OffsetDateTime::parse(&rec_1.post_at, &Rfc3339)
+                    .unwrap_or(OffsetDateTime::UNIX_EPOCH);
+                let rec_2_post_at = OffsetDateTime::parse(&rec_2.post_at, &Rfc3339)
+                    .unwrap_or(OffsetDateTime::UNIX_EPOCH);
+                rec_2_post_at.cmp(&rec_1_post_at)
+            });
+            let mut word_count = 0_usize;
+            let mut messages = records
+                .into_iter()
+                .take_while(|rec| {
+                    let char_count = rec.message.chars().count();
+                    if word_count + char_count <= MAX_CONTEXT_WORD_COUNT {
+                        word_count += char_count;
+                        true
+                    } else {
+                        false
+                    }
+                })
+                .map(|rec| CompletionRecordSimple {
+                    message_type: rec.message_type,
+                    message: rec.message,
+                    generated_by: rec.generated_by,
+                })
+                .collect::<Vec<_>>();
+            messages.reverse();
+
+            (
+                StatusCode::OK,
+                Json(GetCompletionResponse {
+                    bot_id: payload.bot_id,
+                    user_id: payload.user_id,
+                    messages,
+                }),
+            )
+                .into_response()
+        }
     }
 }
 

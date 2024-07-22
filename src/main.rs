@@ -1,5 +1,5 @@
-use axum::routing::{get, get_service, patch, post};
 use axum::Router;
+use axum::routing::{get, get_service, patch, post};
 use tower_http::services::ServeDir;
 use tracing::Level;
 
@@ -16,7 +16,8 @@ use crate::controller::mal_character_controller::{
     get_all_mal_characters, get_mal_character, post_mal_character,
 };
 use crate::controller::message_controller::{
-    get_completion_records, get_message_records, post_completion_record, post_message_record,
+    get_chat_completion_records, get_creative_completion_records, get_message_records,
+    post_chat_completion_record, post_creative_completion_record, post_message_record,
 };
 use crate::controller::roll_controller::{
     get_all_rolls, get_all_user_rolls, get_user_roll_by_id, post_user_roll,
@@ -24,9 +25,7 @@ use crate::controller::roll_controller::{
 use crate::controller::save_file_controller::save_file;
 use crate::model::app_state::AppState;
 use crate::shared::configuration::CONFIGURATION;
-use crate::shared::swc_notifier::{
-    initialize_slime_notification, initialize_tartarus_notification,
-};
+use crate::shared::swc_notifier::initialize_tartarus_notification;
 use crate::shared::swc_scraper::initialize_scraper;
 use crate::shared::util::initialize_clients;
 
@@ -68,10 +67,6 @@ async fn main() -> anyhow::Result<()> {
         initialize_tartarus_notification().await;
     });
 
-    tokio::spawn(async move {
-        initialize_slime_notification().await;
-    });
-
     let state = AppState {
         cosmos_db: initialize_clients(),
     };
@@ -104,8 +99,19 @@ async fn main() -> anyhow::Result<()> {
         .route("/user_roll/:user_id/:roll_id", get(get_user_roll_by_id))
         .route("/login", post(login))
         .route("/save_file", post(save_file))
-        .route("/message/completion/new", post(post_completion_record))
-        .route("/message/completion/list", post(get_completion_records))
+        .route("/message/completion/new", post(post_chat_completion_record))
+        .route(
+            "/message/completion/list",
+            post(get_chat_completion_records),
+        )
+        .route(
+            "/creative/completion/new",
+            post(post_creative_completion_record),
+        )
+        .route(
+            "/creative/completion/list",
+            post(get_creative_completion_records),
+        )
         .route("/message/record/new", post(post_message_record))
         .route("/message/record/list", post(get_message_records))
         .nest_service("/asset", get_service(ServeDir::new("./asset")))

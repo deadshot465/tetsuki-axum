@@ -1,6 +1,6 @@
 [package]
 name = "tetsuki-axum"
-version = "2.3.5"
+version = "2.4.0"
 authors = ["Chehui Chou <deadshot465@gmail.com>"]
 edition = "2021"
 
@@ -10,9 +10,9 @@ edition = "2021"
 anyhow = "~1.0.57"
 axum = { version = "0.7.5", features = ["macros"] }
 axum-extra = { version = "0.9.3", features = ["typed-header"] }
-azure_core = "0.19.0"
-azure_data_cosmos = "0.19.0"
-dashmap = "5.4.0"
+azure_core = "0.20.0"
+azure_data_cosmos = "0.20.0"
+dashmap = "6.0.1"
 dotenv = "~0.15.0"
 futures = "~0.3.21"
 jsonwebtoken = "9.3.0"
@@ -22,7 +22,7 @@ reqwest = { version = "0.12.2", features = ["json"] }
 serde = "~1.0.136"
 serde_json = "~1.0.79"
 sqlx = { version = "0.7.4", features = ["postgres", "runtime-tokio-rustls", "json"] }
-thirtyfour = "0.32.0"
+thirtyfour = "0.33.0"
 time = { version = "~0.3.11", features = ["serde", "serde-well-known"] }
 tokio = { version = "1.27.0", features = ["full"] }
 toml = ">=0.7.3"
