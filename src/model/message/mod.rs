@@ -45,7 +45,7 @@ pub struct CompletionRecordSimple {
 pub struct GetCompletionRequest {
     pub bot_id: String,
     pub user_id: String,
-    pub channel_id: String,
+    pub channel_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]

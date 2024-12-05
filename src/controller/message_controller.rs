@@ -1,7 +1,7 @@
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::Json;
 use axum::response::{IntoResponse, Response};
+use axum::Json;
 use azure_data_cosmos::prelude::{Param, Query};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -186,7 +186,7 @@ async fn get_completion_records(
             Param::new("@user_id".into(), payload.user_id.clone()),
             Param::new("@generated_by".into(), payload.user_id.clone()),
             Param::new("@bot_id".into(), payload.bot_id.clone()),
-            Param::new("@channel_id".into(), payload.channel_id.clone()),
+            Param::new("@channel_id".into(), payload.channel_id.clone().unwrap_or_default()),
         ],
     );
     let completion_records =
