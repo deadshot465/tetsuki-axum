@@ -1,6 +1,6 @@
 [package]
 name = "tetsuki-axum"
-version = "3.0.0"
+version = "3.1.0"
 authors = ["Chehui Chou <deadshot465@gmail.com>"]
 edition = "2024"
 
@@ -24,7 +24,7 @@ serde_json = "~1.0.151"
 sqlx = { version = "0.9.0", features = ["postgres", "runtime-tokio", "json", "tls-rustls"] }
 thirtyfour = "0.37.5"
 time = { version = "~0.3.11", features = ["serde", "serde-well-known"] }
-tokio = { version = "1.27.0", features = ["full"] }
+tokio = { version = "1.53.1", features = ["full", "process"] }
 toml = ">=0.7.3"
 tower = "0.5.3"
 tower-http = { version = "0.7.1", features = ["fs"] }

@@ -19,6 +19,7 @@ use crate::controller::message_controller::{
     get_chat_completion_records, get_creative_completion_records, get_message_records,
     post_chat_completion_record, post_creative_completion_record, post_message_record,
 };
+use crate::controller::novel_controller::summarize_codex;
 use crate::controller::roll_controller::{
     get_all_rolls, get_all_user_rolls, get_user_roll_by_id, post_user_roll,
 };
@@ -114,6 +115,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .route("/message/record/new", post(post_message_record))
         .route("/message/record/list", post(get_message_records))
+        .route("/novel/summary", post(summarize_codex))
         .nest_service("/asset", get_service(ServeDir::new("./asset")))
         .nest_service("/upload", get_service(ServeDir::new("./upload")))
         .with_state(state);
