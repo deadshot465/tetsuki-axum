@@ -1,4 +1,3 @@
-use azure_data_cosmos::CosmosEntity;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -80,13 +79,5 @@ impl From<MessageInfo> for MessageRecord {
             post_at: value.post_at,
             generated_by: value.generated_by,
         }
-    }
-}
-
-impl CosmosEntity for MessageRecord {
-    type Entity = String;
-
-    fn partition_key(&self) -> Self::Entity {
-        self.id.clone()
     }
 }

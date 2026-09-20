@@ -1,7 +1,6 @@
-use azure_data_cosmos::prelude::{CosmosClient, DatabaseClient};
+use azure_data_cosmos::CosmosClient;
 
 #[derive(Clone)]
 pub struct CosmosDb {
     pub client: CosmosClient,
-    pub database: DatabaseClient,
 }

@@ -25,6 +25,7 @@ fn initialize() -> anyhow::Result<Configuration> {
             server_address: std::env::var("SERVER_ADDRESS")?,
             dialog_quality: 75,
             log_level: "DEBUG".to_string(),
+            cosmos_db_endpoint: std::env::var("COSMOS_DB_ENDPOINT")?,
             cosmos_db_primary_key: std::env::var("COSMOS_DB_PRIMARY_KEY")?,
             cosmos_db_database_name: std::env::var("COSMOS_DB_DATABASE_NAME")?,
             cosmos_db_account: std::env::var("COSMOS_DB_ACCOUNT")?,

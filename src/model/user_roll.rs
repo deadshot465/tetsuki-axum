@@ -1,5 +1,4 @@
 use crate::model::mal_character::MalCharacter;
-use azure_data_cosmos::CosmosEntity;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Clone, Debug, Default)]
@@ -13,14 +12,6 @@ pub struct UserRoll {
     #[serde(rename = "CreatedAt")]
     pub created_at: String,
     pub id: String,
-}
-
-impl CosmosEntity for UserRoll {
-    type Entity = i32;
-
-    fn partition_key(&self) -> Self::Entity {
-        self.roll_id
-    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]

@@ -2,28 +2,45 @@ use crate::model::app_state::AppState;
 use crate::model::claim::Claim;
 use crate::model::errors::ServerError;
 use crate::model::mal_character::MalCharacter;
-use crate::shared::util::{add_document, query_document, query_document_within_collection};
+use crate::shared::configuration::CONFIGURATION;
+use crate::shared::util::{add_document, query_document, query_document_within_container};
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
-use azure_data_cosmos::prelude::{CollectionClient, Param, Query};
+use azure_data_cosmos::ContainerClient;
+use azure_data_cosmos::feed::Query;
 use uuid::Uuid;
 
 pub const MAL_CHARACTERS: &str = "MalCharacters";
 
-pub async fn inner_get_all_mal_characters(collection: &CollectionClient) -> Vec<MalCharacter> {
-    let query = Query::new(format!("SELECT * FROM {} m", MAL_CHARACTERS));
-    query_document_within_collection::<MalCharacter, _>(collection, query, true)
+pub async fn inner_get_all_mal_characters(container: &ContainerClient) -> Vec<MalCharacter> {
+    let query = Query::from(format!("SELECT * FROM {} m", MAL_CHARACTERS));
+    query_document_within_container::<MalCharacter, _>(container, query)
         .await
         .unwrap_or_default()
 }
 
 pub async fn get_all_mal_characters(_claim: Claim, State(state): State<AppState>) -> Response {
     let cosmos_db = state.cosmos_db;
-    let collection = cosmos_db.database.collection_client(MAL_CHARACTERS);
-    let query_result = inner_get_all_mal_characters(&collection).await;
-    (StatusCode::OK, Json(query_result)).into_response()
+    let db_client = cosmos_db
+        .client
+        .database_client(&CONFIGURATION.cosmos_db_database_name);
+    match db_client.container_client(MAL_CHARACTERS, None).await {
+        Err(e) => {
+            let error_message = format!("Failed to list all mal characters: {}", e);
+            tracing::error!("{}", &error_message);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ServerError::with_message(error_message)),
+            )
+                .into_response()
+        }
+        Ok(container) => {
+            let query_result = inner_get_all_mal_characters(&container).await;
+            (StatusCode::OK, Json(query_result)).into_response()
+        }
+    }
 }
 
 pub async fn get_mal_character(
@@ -32,15 +49,17 @@ pub async fn get_mal_character(
     State(state): State<AppState>,
 ) -> Response {
     let cosmos_db = state.cosmos_db;
-    let query = Query::with_params(
-        "SELECT * FROM MalCharacters m WHERE m.Id = @id".into(),
-        vec![Param::new("@id".into(), id)],
-    );
+    let query = Query::from("SELECT * FROM MalCharacters m WHERE m.Id = @id")
+        .with_parameter("@id", id)
+        .expect("Failed to build query.");
 
-    let query_result =
-        query_document::<MalCharacter, _, _>(&cosmos_db.database, MAL_CHARACTERS, query, true)
-            .await
-            .and_then(|v| v.first().cloned());
+    let db_client = cosmos_db
+        .client
+        .database_client(&CONFIGURATION.cosmos_db_database_name);
+
+    let query_result = query_document::<MalCharacter, _, _>(&db_client, MAL_CHARACTERS, query)
+        .await
+        .and_then(|v| v.first().cloned());
 
     match query_result {
         None => (
@@ -64,7 +83,11 @@ pub async fn post_mal_character(
         payload.id = Uuid::new_v4().to_string()
     }
 
-    match add_document(&cosmos_db.database, MAL_CHARACTERS, payload.clone()).await {
+    let db_client = cosmos_db
+        .client
+        .database_client(&CONFIGURATION.cosmos_db_database_name);
+
+    match add_document(&db_client, MAL_CHARACTERS, &payload.id, payload.clone()).await {
         Ok(_) => (StatusCode::CREATED, Json(payload)).into_response(),
         Err(e) => {
             let error_message = format!("Failed to insert mal character into database: {}", e);

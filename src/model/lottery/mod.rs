@@ -1,7 +1,6 @@
-use azure_data_cosmos::CosmosEntity;
 use serde::{Deserialize, Serialize};
-use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct UserLottery {
@@ -10,14 +9,6 @@ pub struct UserLottery {
     pub next_daily_time: String,
     pub next_weekly_time: String,
     pub lotteries: Vec<Vec<u8>>,
-}
-
-impl CosmosEntity for UserLottery {
-    type Entity = String;
-
-    fn partition_key(&self) -> Self::Entity {
-        self.id.clone()
-    }
 }
 
 impl Default for UserLottery {

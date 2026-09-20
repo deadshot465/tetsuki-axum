@@ -68,35 +68,35 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let state = AppState {
-        cosmos_db: initialize_clients(),
+        cosmos_db: initialize_clients().await?,
     };
 
     let app = Router::new()
         .route("/credit", get(get_all_user_credits).post(add_user))
         .route(
-            "/credit/:user_id",
+            "/credit/{user_id}",
             get(get_single_user_credits).delete(delete_user),
         )
-        .route("/credit/:user_id/plus", patch(add_credit))
-        .route("/credit/:user_id/minus", patch(reduce_credit))
+        .route("/credit/{user_id}/plus", patch(add_credit))
+        .route("/credit/{user_id}/minus", patch(reduce_credit))
         .route("/dialog", get(get_dialog_options).post(generate_dialog))
         .route("/lottery", get(get_all_lotteries))
         .route(
-            "/lottery/:user_id",
+            "/lottery/{user_id}",
             get(get_user_lotteries).delete(delete_lotteries),
         )
-        .route("/lottery/:user_id/daily", get(get_daily_reward))
-        .route("/lottery/:user_id/weekly", get(get_weekly_reward))
-        .route("/lottery/:user_id/new", post(add_lottery))
+        .route("/lottery/{user_id}/daily", get(get_daily_reward))
+        .route("/lottery/{user_id}/weekly", get(get_weekly_reward))
+        .route("/lottery/{user_id}/new", post(add_lottery))
         .route(
             "/mal_character",
             get(get_all_mal_characters).post(post_mal_character),
         )
-        .route("/mal_character/:id", get(get_mal_character))
+        .route("/mal_character/{id}", get(get_mal_character))
         .route("/user_roll", get(get_all_rolls))
-        .route("/user_roll/:user_id", get(get_all_user_rolls))
-        .route("/user_roll/:user_id/new", post(post_user_roll))
-        .route("/user_roll/:user_id/:roll_id", get(get_user_roll_by_id))
+        .route("/user_roll/{user_id}", get(get_all_user_rolls))
+        .route("/user_roll/{user_id}/new", post(post_user_roll))
+        .route("/user_roll/{user_id}/{roll_id}", get(get_user_roll_by_id))
         .route("/login", post(login))
         .route("/save_file", post(save_file))
         .route("/message/completion/new", post(post_chat_completion_record))

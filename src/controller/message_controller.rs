@@ -1,10 +1,10 @@
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
-use azure_data_cosmos::prelude::{Param, Query};
-use time::format_description::well_known::Rfc3339;
+use azure_data_cosmos::Query;
 use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
 use crate::model::app_state::AppState;
@@ -14,7 +14,8 @@ use crate::model::message::{
     CompletionRecordSimple, GetCompletionRequest, GetCompletionResponse, GetMessageRequest,
     GetMessageResponse, MessageInfo, MessageRecord, MessageRecordSimple,
 };
-use crate::shared::util::{add_document_into_collection, query_document_within_collection};
+use crate::shared::configuration::CONFIGURATION;
+use crate::shared::util::{add_document_into_container, query_document_within_container};
 
 const CHAT_COMPLETION_RECORDS: &str = "ChatCompletionRecords";
 const CREATIVE_COMPLETION_RECORDS: &str = "CreativeCompletionRecords";
@@ -68,21 +69,33 @@ pub async fn get_message_records(
     Json(payload): Json<GetMessageRequest>,
 ) -> Response {
     let cosmos_db = state.cosmos_db;
-    let message_collection = cosmos_db.database.collection_client(CHAT_MESSAGE_RECORDS);
+    let db_client = cosmos_db
+        .client
+        .database_client(&CONFIGURATION.cosmos_db_database_name);
+    let message_container = db_client.container_client(CHAT_MESSAGE_RECORDS, None).await;
 
-    let query = Query::with_params(
-        format!(
-            "SELECT * FROM {} c WHERE c.bot_id = @bot_id AND c.channel_id = @channel_id",
-            CHAT_MESSAGE_RECORDS
-        ),
-        vec![
-            Param::new("@bot_id".into(), payload.bot_id.clone()),
-            Param::new("@channel_id".into(), payload.channel_id.clone()),
-        ],
-    );
+    if let Err(e) = message_container {
+        let error_message = format!("Failed to get message records: {}", e);
+        tracing::error!("{}", &error_message);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ServerError::with_message(error_message)),
+        )
+            .into_response();
+    }
+
+    let message_container = message_container.expect("Failed to get message container.");
+
+    let query = Query::from(format!(
+        "SELECT * FROM {} c WHERE c.bot_id = @bot_id AND c.channel_id = @channel_id",
+        CHAT_MESSAGE_RECORDS
+    ))
+    .with_parameter("@bot_id", payload.bot_id.clone())
+    .and_then(|q| q.with_parameter("@channel_id", payload.channel_id.clone()))
+    .expect("Failed to build query.");
+
     let message_records =
-        query_document_within_collection::<MessageRecord, _>(&message_collection, query, true)
-            .await;
+        query_document_within_container::<MessageRecord, _>(&message_container, query).await;
 
     match message_records {
         None => (
@@ -141,7 +154,22 @@ async fn post_record(
     collection_name: String,
 ) -> Response {
     let cosmos_db = state.cosmos_db;
-    let collection = cosmos_db.database.collection_client(collection_name);
+    let db_client = cosmos_db
+        .client
+        .database_client(&CONFIGURATION.cosmos_db_database_name);
+    let container = db_client.container_client(collection_name, None).await;
+
+    if let Err(e) = container {
+        let error_message = format!("Failed to post message record: {}", e);
+        tracing::error!("{}", &error_message);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ServerError::with_message(error_message)),
+        )
+            .into_response();
+    }
+
+    let container = container.expect("Failed to get container.");
 
     match validate_message_info(payload) {
         Ok(payload) => {
@@ -150,7 +178,9 @@ async fn post_record(
                 ..payload.into()
             };
 
-            match add_document_into_collection(&collection, new_document).await {
+            let item_id = new_document.id.clone();
+
+            match add_document_into_container(&container, &item_id, new_document).await {
                 Ok(_) => StatusCode::CREATED.into_response(),
                 Err(e) => {
                     let error_message = format!("Failed to add completion record: {}", e);
@@ -173,25 +203,39 @@ async fn get_completion_records(
     collection_name: String,
 ) -> Response {
     let cosmos_db = state.cosmos_db;
-    let completion_collection = cosmos_db
-        .database
-        .collection_client(collection_name.clone());
+    let db_client = cosmos_db
+        .client
+        .database_client(&CONFIGURATION.cosmos_db_database_name);
+    let completion_container = db_client
+        .container_client(collection_name.clone(), None)
+        .await;
 
-    let query = Query::with_params(
+    if let Err(e) = completion_container {
+        let error_message = format!("Failed to get completion records: {}", e);
+        tracing::error!("{}", &error_message);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ServerError::with_message(error_message)),
+        )
+            .into_response();
+    }
+
+    let completion_container = completion_container.expect("Failed to get completion container.");
+
+    let query = Query::from(
         format!(
             "SELECT * FROM {} c WHERE (c.user_id = @user_id OR c.generated_by = @generated_by) AND c.bot_id = @bot_id AND c.channel_id = @channel_id",
             collection_name,
-        ),
-        vec![
-            Param::new("@user_id".into(), payload.user_id.clone()),
-            Param::new("@generated_by".into(), payload.user_id.clone()),
-            Param::new("@bot_id".into(), payload.bot_id.clone()),
-            Param::new("@channel_id".into(), payload.channel_id.clone().unwrap_or_default()),
-        ],
-    );
+        ))
+        .with_parameter("@user_id", payload.user_id.clone())
+        .and_then(|q| q.with_parameter("@generated_by", payload.user_id.clone()))
+        .and_then(|q| q.with_parameter("@bot_id", payload.bot_id.clone()))
+        .and_then(|q| q.with_parameter("@channel_id",
+                                       payload.channel_id.clone().unwrap_or_default()))
+        .expect("Failed to build query.");
+
     let completion_records =
-        query_document_within_collection::<MessageRecord, _>(&completion_collection, query, true)
-            .await;
+        query_document_within_container::<MessageRecord, _>(&completion_container, query).await;
 
     match completion_records {
         None => (

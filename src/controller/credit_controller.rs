@@ -2,22 +2,25 @@ use crate::model::app_state::AppState;
 use crate::model::claim::Claim;
 use crate::model::errors::ServerError;
 use crate::model::user_credit::{UserCredit, UserCreditUpdateInfo, UserCreditUpdateOpt};
+use crate::shared::configuration::CONFIGURATION;
+use crate::shared::util::{
+    add_document, adjust_credit, get_documents, query_document, query_document_within_container,
+};
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
-use azure_data_cosmos::prelude::{Param, Query};
-
-use crate::shared::util::{
-    add_document, adjust_credit, get_documents, query_document, query_document_within_collection,
-};
+use azure_data_cosmos::feed::Query;
 
 pub const USER_CREDITS: &str = "UserCredits";
 
 pub async fn get_all_user_credits(_claim: Claim, State(state): State<AppState>) -> Response {
     let cosmos_db = state.cosmos_db;
+    let db_client = cosmos_db
+        .client
+        .database_client(&CONFIGURATION.cosmos_db_database_name);
 
-    if let Some(credits) = get_documents::<UserCredit, _>(&cosmos_db.database, USER_CREDITS).await {
+    if let Some(credits) = get_documents::<UserCredit, _>(&db_client, USER_CREDITS).await {
         (StatusCode::OK, Json(credits)).into_response()
     } else {
         (
@@ -37,16 +40,19 @@ pub async fn get_single_user_credits(
 ) -> Response {
     let cosmos_db = state.cosmos_db;
 
-    let query = Query::with_params(
-        format!(
-            "SELECT * FROM {} u WHERE u.user_id = @user_id",
-            USER_CREDITS
-        ),
-        vec![Param::new("@user_id".into(), user_id)],
-    );
+    let db_client = cosmos_db
+        .client
+        .database_client(&CONFIGURATION.cosmos_db_database_name);
+
+    let query = Query::from(format!(
+        "SELECT * FROM {} u WHERE u.user_id = @user_id",
+        USER_CREDITS
+    ))
+    .with_parameter("@user_id", user_id)
+    .expect("Failed to build query.");
 
     if let Some(query_result) =
-        query_document::<UserCredit, _, _>(&cosmos_db.database, USER_CREDITS, query, true).await
+        query_document::<UserCredit, _, _>(&db_client, USER_CREDITS, query).await
     {
         (
             StatusCode::OK,
@@ -87,18 +93,19 @@ pub async fn add_user(
             .into_response();
     }
 
-    let query = Query::with_params(
-        format!(
-            "SELECT * FROM {} u WHERE u.user_id = @user_id",
-            USER_CREDITS
-        ),
-        vec![Param::new("@user_id".into(), user_credit.user_id.clone())],
-    );
+    let query = Query::from(format!(
+        "SELECT * FROM {} u WHERE u.user_id = @user_id",
+        USER_CREDITS
+    ))
+    .with_parameter("@user_id", user_credit.user_id.clone())
+    .expect("Failed to build query.");
 
     let cosmos_db = state.cosmos_db;
+    let db_client = cosmos_db
+        .client
+        .database_client(&CONFIGURATION.cosmos_db_database_name);
 
-    let query_result =
-        query_document::<UserCredit, _, _>(&cosmos_db.database, USER_CREDITS, query, true).await;
+    let query_result = query_document::<UserCredit, _, _>(&db_client, USER_CREDITS, query).await;
     if query_result.is_some() {
         return (
             StatusCode::BAD_REQUEST,
@@ -109,7 +116,9 @@ pub async fn add_user(
             .into_response();
     }
 
-    match add_document(&cosmos_db.database, USER_CREDITS, user_credit.clone()).await {
+    let item_id = user_credit.id.as_str();
+
+    match add_document(&db_client, USER_CREDITS, item_id, user_credit.clone()).await {
         Ok(_) => (StatusCode::CREATED, Json(user_credit)).into_response(),
         Err(e) => {
             let error_message = format!("{}", e);
@@ -130,13 +139,10 @@ pub async fn add_credit(
     Json(user_credit): Json<UserCreditUpdateInfo>,
 ) -> Response {
     let cosmos_db = state.cosmos_db;
-    adjust_credit(
-        &cosmos_db.database,
-        user_id,
-        user_credit,
-        UserCreditUpdateOpt::Plus,
-    )
-    .await
+    let db_client = cosmos_db
+        .client
+        .database_client(&CONFIGURATION.cosmos_db_database_name);
+    adjust_credit(&db_client, user_id, user_credit, UserCreditUpdateOpt::Plus).await
 }
 
 pub async fn reduce_credit(
@@ -146,13 +152,10 @@ pub async fn reduce_credit(
     Json(user_credit): Json<UserCreditUpdateInfo>,
 ) -> Response {
     let cosmos_db = state.cosmos_db;
-    adjust_credit(
-        &cosmos_db.database,
-        user_id,
-        user_credit,
-        UserCreditUpdateOpt::Minus,
-    )
-    .await
+    let db_client = cosmos_db
+        .client
+        .database_client(&CONFIGURATION.cosmos_db_database_name);
+    adjust_credit(&db_client, user_id, user_credit, UserCreditUpdateOpt::Minus).await
 }
 
 pub async fn delete_user(
@@ -161,36 +164,38 @@ pub async fn delete_user(
     State(state): State<AppState>,
 ) -> Response {
     let cosmos_db = state.cosmos_db;
-    let collection = cosmos_db.database.collection_client(USER_CREDITS);
+    let db_client = cosmos_db
+        .client
+        .database_client(&CONFIGURATION.cosmos_db_database_name);
+    let container = db_client.container_client(USER_CREDITS, None).await;
 
-    let query = Query::with_params(
-        format!(
-            "SELECT * FROM {} u WHERE u.user_id = @user_id",
-            USER_CREDITS
-        ),
-        vec![Param::new("@user_id".into(), user_id)],
-    );
-    let query_result = query_document_within_collection::<UserCredit, _>(&collection, query, true)
+    if let Err(e) = container {
+        let error_message = format!("Failed to delete user: {}", e);
+        tracing::error!("{}", &error_message);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ServerError::with_message(error_message)),
+        )
+            .into_response();
+    }
+
+    let container = container.expect("Failed to get container.");
+
+    let query = Query::from(format!(
+        "SELECT * FROM {} u WHERE u.user_id = @user_id",
+        USER_CREDITS
+    ))
+    .with_parameter("@user_id", user_id)
+    .expect("Failed to build query.");
+
+    let query_result = query_document_within_container::<UserCredit, _>(&container, query)
         .await
         .and_then(|result| result.first().cloned());
 
     if let Some(result) = query_result {
-        let document = collection.document_client(result.id.clone(), &result.id);
-        match document {
-            Ok(doc) => match doc.delete_document().into_future().await {
-                Ok(_) => StatusCode::NO_CONTENT.into_response(),
-                Err(e) => {
-                    let error_message = format!("Failed to delete user credit: {}", e);
-                    tracing::error!("{}", &error_message);
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(ServerError::with_message(error_message)),
-                    )
-                        .into_response()
-                }
-            },
+        match container.delete_item("id", &result.id, None).await {
             Err(e) => {
-                let error_message = format!("{}", e);
+                let error_message = format!("Failed to delete user: {}", e);
                 tracing::error!("{}", &error_message);
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -198,6 +203,7 @@ pub async fn delete_user(
                 )
                     .into_response()
             }
+            Ok(_) => StatusCode::NO_CONTENT.into_response(),
         }
     } else {
         (

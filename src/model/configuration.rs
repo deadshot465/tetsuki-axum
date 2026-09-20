@@ -11,6 +11,7 @@ pub struct Configuration {
     pub server_address: String,
     pub dialog_quality: i32,
     pub log_level: String,
+    pub cosmos_db_endpoint: String,
     pub cosmos_db_primary_key: String,
     pub cosmos_db_database_name: String,
     pub cosmos_db_account: String,

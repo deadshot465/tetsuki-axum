@@ -1,7 +1,7 @@
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use std::borrow::Cow;
 
 use crate::model::app_state::AppState;
@@ -42,7 +42,7 @@ pub async fn save_file(
                         match bytes {
                             Ok(bytes) => {
                                 let bytes = bytes.to_vec();
-                                let path = format!("./upload/{}", &filename);
+                                let path = format!("./upload/{}", filename);
 
                                 if let Err(e) = std::fs::write(path, bytes) {
                                     let error_message =

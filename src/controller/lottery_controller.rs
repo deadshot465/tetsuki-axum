@@ -5,18 +5,19 @@ use crate::model::cosmos_db::CosmosDb;
 use crate::model::errors::ServerError;
 use crate::model::lottery::{UserLottery, UserLotteryUpdateInfo};
 use crate::model::user_credit::{UserCredit, UserCreditUpdateInfo, UserCreditUpdateOpt};
+use crate::shared::configuration::CONFIGURATION;
 use crate::shared::util::{
-    add_document, add_document_into_collection, adjust_credit, adjust_credit_in_collection,
-    get_documents, query_document, query_document_within_collection,
+    add_document, add_document_into_container, adjust_credit, adjust_credit_in_collection,
+    get_documents, query_document, query_document_within_container,
 };
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
-use azure_data_cosmos::prelude::{Param, Query};
+use azure_data_cosmos::feed::Query;
 use std::ops::Add;
-use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
 const USER_LOTTERIES: &str = "UserLotteries";
@@ -47,9 +48,11 @@ pub async fn get_weekly_reward(
 
 pub async fn get_all_lotteries(_claim: Claim, State(state): State<AppState>) -> Response {
     let cosmos_db = state.cosmos_db;
-    if let Some(lotteries) =
-        get_documents::<UserLottery, _>(&cosmos_db.database, USER_LOTTERIES).await
-    {
+    let db_client = cosmos_db
+        .client
+        .database_client(&CONFIGURATION.cosmos_db_database_name);
+
+    if let Some(lotteries) = get_documents::<UserLottery, _>(&db_client, USER_LOTTERIES).await {
         (StatusCode::OK, Json(lotteries)).into_response()
     } else {
         (
@@ -68,16 +71,19 @@ pub async fn get_user_lotteries(
     State(state): State<AppState>,
 ) -> Response {
     let cosmos_db = state.cosmos_db;
-    let query = Query::with_params(
-        format!(
-            "SELECT * FROM {} u WHERE u.user_id = @user_id",
-            USER_LOTTERIES
-        ),
-        vec![Param::new("@user_id".into(), user_id)],
-    );
+    let query = Query::from(format!(
+        "SELECT * FROM {} u WHERE u.user_id = @user_id",
+        USER_LOTTERIES
+    ))
+    .with_parameter("@user_id", user_id)
+    .expect("Failed to build query.");
+
+    let db_client = cosmos_db
+        .client
+        .database_client(&CONFIGURATION.cosmos_db_database_name);
 
     if let Some(query_result) =
-        query_document::<UserLottery, _, _>(&cosmos_db.database, USER_LOTTERIES, query, true).await
+        query_document::<UserLottery, _, _>(&db_client, USER_LOTTERIES, query).await
     {
         let user_lottery = query_result.first().cloned().unwrap_or_default();
         (StatusCode::OK, Json(user_lottery)).into_response()
@@ -99,6 +105,11 @@ pub async fn add_lottery(
     Json(mut payload): Json<UserLotteryUpdateInfo>,
 ) -> Response {
     let cosmos_db = state.cosmos_db;
+
+    let db_client = cosmos_db
+        .client
+        .database_client(&CONFIGURATION.cosmos_db_database_name);
+
     if payload
         .lotteries
         .iter()
@@ -114,21 +125,37 @@ pub async fn add_lottery(
     }
 
     let lottery_count = payload.lotteries.len();
-    let lottery_collection = cosmos_db.database.collection_client(USER_LOTTERIES);
-    let credit_collection = cosmos_db.database.collection_client(USER_CREDITS);
 
-    let query = Query::with_params(
-        format!(
-            "SELECT * FROM {} u WHERE u.user_id = @user_id",
-            USER_CREDITS
-        ),
-        vec![Param::new("@user_id".into(), user_id.clone())],
-    );
+    let lottery_container = db_client.container_client(USER_LOTTERIES, None).await;
 
-    let user_credit =
-        query_document_within_collection::<UserCredit, _>(&credit_collection, query, true)
-            .await
-            .and_then(|res| res.first().cloned());
+    if let Err(e) = lottery_container {
+        let error_message = format!("Failed to get lottery container: {}", e);
+        tracing::error!("{}", &error_message);
+        return (StatusCode::INTERNAL_SERVER_ERROR, error_message).into_response();
+    }
+
+    let lottery_container = lottery_container.expect("Failed to get lottery container.");
+
+    let credit_container = db_client.container_client(USER_CREDITS, None).await;
+
+    if let Err(e) = credit_container {
+        let error_message = format!("Failed to get credit container: {}", e);
+        tracing::error!("{}", &error_message);
+        return (StatusCode::INTERNAL_SERVER_ERROR, error_message).into_response();
+    }
+
+    let credit_container = credit_container.expect("Failed to get credit container.");
+
+    let query = Query::from(format!(
+        "SELECT * FROM {} u WHERE u.user_id = @user_id",
+        USER_CREDITS
+    ))
+    .with_parameter("@user_id", user_id.clone())
+    .expect("Failed to build query.");
+
+    let user_credit = query_document_within_container::<UserCredit, _>(&credit_container, query)
+        .await
+        .and_then(|res| res.first().cloned());
 
     match user_credit {
         None => {
@@ -157,7 +184,10 @@ pub async fn add_lottery(
                     ..credit
                 };
 
-                if let Err(e) = add_document_into_collection(&credit_collection, new_document).await
+                let item_id = new_document.id.clone();
+
+                if let Err(e) =
+                    add_document_into_container(&credit_container, &item_id, new_document).await
                 {
                     tracing::error!(
                         "Failed to update user's name during lottery purchase: {}",
@@ -168,20 +198,18 @@ pub async fn add_lottery(
         }
     }
 
-    let query = Query::with_params(
-        format!(
-            "SELECT * FROM {} u WHERE u.user_id = @user_id",
-            USER_LOTTERIES
-        ),
-        vec![Param::new("@user_id".into(), user_id.clone())],
-    );
+    let query = Query::from(format!(
+        "SELECT * FROM {} u WHERE u.user_id = @user_id",
+        USER_LOTTERIES
+    ))
+    .with_parameter("@user_id", user_id.clone())
+    .expect("Failed to build query.");
 
     for lottery in payload.lotteries.iter_mut() {
         lottery.sort_unstable();
     }
 
-    match query_document_within_collection::<UserLottery, _>(&lottery_collection, query, true).await
-    {
+    match query_document_within_container::<UserLottery, _>(&lottery_container, query).await {
         None => {
             let new_document = UserLottery {
                 id: Uuid::new_v4().to_string(),
@@ -197,10 +225,14 @@ pub async fn add_lottery(
                 lotteries: payload.lotteries,
             };
 
-            match add_document_into_collection(&lottery_collection, new_document.clone()).await {
+            let item_id = new_document.id.as_str();
+
+            match add_document_into_container(&lottery_container, item_id, new_document.clone())
+                .await
+            {
                 Ok(_) => {
                     adjust_credit_in_collection(
-                        &credit_collection,
+                        &credit_container,
                         user_id.clone(),
                         UserCreditUpdateInfo {
                             credit: (10 * lottery_count) as i32,
@@ -229,10 +261,14 @@ pub async fn add_lottery(
                 ..user_lottery
             };
 
-            match add_document_into_collection(&lottery_collection, new_document.clone()).await {
+            let item_id = new_document.id.as_str();
+
+            match add_document_into_container(&lottery_container, item_id, new_document.clone())
+                .await
+            {
                 Ok(_) => {
                     adjust_credit_in_collection(
-                        &credit_collection,
+                        &credit_container,
                         user_id.clone(),
                         UserCreditUpdateInfo {
                             credit: (10 * lottery_count) as i32,
@@ -262,18 +298,19 @@ pub async fn delete_lotteries(
     State(state): State<AppState>,
 ) -> Response {
     let cosmos_db = state.cosmos_db;
-    let query = Query::with_params(
-        format!(
-            "SELECT * FROM {} u WHERE u.user_id = @user_id",
-            USER_LOTTERIES
-        ),
-        vec![Param::new("@user_id".into(), user_id.clone())],
-    );
+    let db_client = cosmos_db
+        .client
+        .database_client(&CONFIGURATION.cosmos_db_database_name);
+    let query = Query::from(format!(
+        "SELECT * FROM {} u WHERE u.user_id = @user_id",
+        USER_LOTTERIES
+    ))
+    .with_parameter("@user_id", user_id.clone())
+    .expect("Failed to build query.");
 
-    let query_result =
-        query_document::<UserLottery, _, _>(&cosmos_db.database, USER_LOTTERIES, query, true)
-            .await
-            .and_then(|v| v.first().cloned());
+    let query_result = query_document::<UserLottery, _, _>(&db_client, USER_LOTTERIES, query)
+        .await
+        .and_then(|v| v.first().cloned());
 
     match query_result {
         None => (
@@ -289,7 +326,9 @@ pub async fn delete_lotteries(
                 ..user_lottery
             };
 
-            match add_document(&cosmos_db.database, USER_LOTTERIES, new_document).await {
+            let item_id = new_document.id.clone();
+
+            match add_document(&db_client, USER_LOTTERIES, &item_id, new_document).await {
                 Ok(_) => StatusCode::NO_CONTENT.into_response(),
                 Err(e) => {
                     let error_message = format!(
@@ -309,17 +348,18 @@ pub async fn delete_lotteries(
 }
 
 async fn get_reward(user_id: String, reward_type: RewardType, cosmos_db: CosmosDb) -> Response {
-    let query = Query::with_params(
-        format!(
-            "SELECT * FROM {} u WHERE u.user_id = @user_id",
-            USER_LOTTERIES
-        ),
-        vec![Param::new("@user_id".into(), user_id.clone())],
-    );
+    let query = Query::from(format!(
+        "SELECT * FROM {} u WHERE u.user_id = @user_id",
+        USER_LOTTERIES
+    ))
+    .with_parameter("@user_id", user_id.clone())
+    .expect("Failed to build query.");
 
-    match query_document::<UserLottery, _, _>(&cosmos_db.database, "UserLotteries", query, true)
-        .await
-    {
+    let db_client = cosmos_db
+        .client
+        .database_client(&CONFIGURATION.cosmos_db_database_name);
+
+    match query_document::<UserLottery, _, _>(&db_client, "UserLotteries", query).await {
         None => (
             StatusCode::NOT_FOUND,
             Json(ServerError::with_message(
@@ -359,7 +399,9 @@ async fn get_reward(user_id: String, reward_type: RewardType, cosmos_db: CosmosD
                     ..user_lottery
                 };
 
-                match add_document(&cosmos_db.database, USER_LOTTERIES, new_document).await {
+                let item_id = new_document.id.clone();
+
+                match add_document(&db_client, USER_LOTTERIES, &item_id, new_document).await {
                     Ok(_) => response,
                     Err(e) => {
                         let error_message = format!("Failed to update next reward time: {}", e);
@@ -383,8 +425,11 @@ async fn update_credits(
     reward_type: RewardType,
     cosmos_db: &CosmosDb,
 ) -> Response {
+    let db_client = cosmos_db
+        .client
+        .database_client(&CONFIGURATION.cosmos_db_database_name);
     adjust_credit(
-        &cosmos_db.database,
+        &db_client,
         user_lottery.user_id.clone(),
         UserCreditUpdateInfo {
             credit: match reward_type {

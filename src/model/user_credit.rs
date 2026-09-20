@@ -1,4 +1,3 @@
-use azure_data_cosmos::CosmosEntity;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, sqlx::FromRow, Clone, Debug, Default)]
@@ -18,12 +17,4 @@ pub struct UserCreditUpdateInfo {
 pub enum UserCreditUpdateOpt {
     Plus,
     Minus,
-}
-
-impl CosmosEntity for UserCredit {
-    type Entity = String;
-
-    fn partition_key(&self) -> Self::Entity {
-        self.id.clone()
-    }
 }

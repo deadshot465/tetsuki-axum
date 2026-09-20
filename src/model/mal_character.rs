@@ -1,4 +1,3 @@
-use azure_data_cosmos::CosmosEntity;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Clone, Debug, Default)]
@@ -18,12 +17,4 @@ pub struct MalCharacter {
     #[serde(rename = "About")]
     pub about: String,
     pub id: String,
-}
-
-impl CosmosEntity for MalCharacter {
-    type Entity = i32;
-
-    fn partition_key(&self) -> Self::Entity {
-        self.character_id
-    }
 }
