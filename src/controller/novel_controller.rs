@@ -16,6 +16,7 @@ pub async fn summarize_codex(
 ) -> Response {
     let mut args: Vec<String> = vec![
         "-p".into(),
+        "/novel-codex-summary".into(),
         payload.word_count.to_string(),
         payload.keyword.clone(),
     ];
