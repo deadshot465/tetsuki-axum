@@ -14,26 +14,25 @@ pub async fn summarize_codex(
     State(_): State<AppState>,
     Json(payload): Json<CodexSummaryRequest>,
 ) -> Response {
-    let mut args: Vec<String> = vec![
-        "-p".into(),
-        "/novel-codex-summary".into(),
-        payload.word_count.to_string(),
-        payload.keyword.clone(),
-    ];
+    let mut prompt = format!(
+        "/novel-codex-summary {} {}",
+        payload.word_count, payload.keyword
+    );
 
     if let Some(ref novel) = payload.novel {
-        args.push("-n".into());
-        args.push(novel.clone());
+        prompt.push_str(&format!(" -n {}", novel));
     } else {
-        args.push("--merge".into());
+        prompt.push_str("--merge");
     }
 
     if let Some(ref instructions) = payload.additional_instructions {
-        args.push(instructions.clone());
+        prompt.push(' ');
+        prompt.push_str(instructions);
     }
 
     let result = Command::new("claude")
-        .args(args)
+        .arg("-p")
+        .arg(prompt)
         .current_dir(format!("./{}", NOVEL_DIRECTORY))
         .output()
         .await;
