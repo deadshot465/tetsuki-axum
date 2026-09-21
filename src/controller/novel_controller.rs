@@ -3,8 +3,10 @@ use crate::model::claim::Claim;
 use crate::model::errors::ServerError;
 use crate::model::novel::{
     CodexSummaryContainerResponse, CodexSummaryRequest, CodexSummaryResponseLogs,
+    NovelEntityCardRecord,
 };
 use crate::shared::configuration::CONFIGURATION;
+use crate::shared::constants::NOVEL_ABSOULTE_PATH;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -14,8 +16,14 @@ use bollard::config::ContainerCreateBody;
 use bollard::container::LogOutput;
 use bollard::models::HostConfig;
 use bollard::query_parameters::LogsOptionsBuilder;
+use dashmap::DashMap;
 use futures::StreamExt;
-use std::collections::HashMap;
+use once_cell::sync::Lazy;
+use sqlx::{Connection, SqliteConnection};
+use std::collections::{HashMap, HashSet};
+
+static ENTITY_CARDS_TRACK_MAP: Lazy<DashMap<String, HashSet<(i32, NovelEntityCardRecord)>>> =
+    Lazy::new(|| DashMap::new());
 
 pub async fn summarize_codex(
     _claim: Claim,
@@ -57,10 +65,10 @@ pub async fn summarize_codex(
         host_config: Some(HostConfig {
             network_mode: Some(CONFIGURATION.docker_network_name.clone()),
             binds: Some(vec![
-            "/root/.local/bin/claude:/usr/local/bin/claude:ro".to_string(),
-            "/root/Novel:/root/Novel:rw".to_string(),
-            "/root/.claude:/root/.claude:rw".to_string(),
-        ]),
+                "/root/.local/bin/claude:/usr/local/bin/claude:ro".to_string(),
+                "/root/Novel:/root/Novel:rw".to_string(),
+                "/root/.claude:/root/.claude:rw".to_string(),
+            ]),
             ..Default::default()
         }),
         entrypoint: Some(vec!["claude".to_string(), "-p".to_string()]),
@@ -106,6 +114,13 @@ pub async fn summarize_codex(
                 )
                     .into_response()
             } else {
+                let current_records = get_latest_entity_card_records()
+                    .await
+                    .into_iter()
+                    .map(|rec| (rec.id, rec))
+                    .collect::<HashSet<_>>();
+                ENTITY_CARDS_TRACK_MAP.insert(container_id.to_string(), current_records);
+
                 (
                     StatusCode::CREATED,
                     Json(CodexSummaryContainerResponse { container_id }),
@@ -231,13 +246,74 @@ pub async fn get_summary_result(
                 }
             }
 
+            let mut latest_records = get_new_records(&container_id)
+                .await
+                .into_iter()
+                .map(|rec| rec.image_path)
+                .collect::<Vec<_>>();
+
+            response.images.append(&mut latest_records);
+
             (StatusCode::OK, Json(response)).into_response()
         }
     }
+}
+
+pub async fn get_all_entity_cards(_claim: Claim, State(_): State<AppState>) -> Response {
+    let records = get_latest_entity_card_records().await;
+    let map = HashMap::from([("records".to_string(), records)]);
+    (StatusCode::OK, Json(map)).into_response()
 }
 
 fn connect_to_docker_socket() -> Option<Docker> {
     Docker::connect_with_socket_defaults()
         .map_err(|e| tracing::error!("Failed to connect to Docker socket: {}", e))
         .ok()
+}
+
+async fn get_latest_entity_card_records() -> Vec<NovelEntityCardRecord> {
+    let conn =
+        SqliteConnection::connect(&format!("sqlite:///{}/novel.sqlite", &NOVEL_ABSOULTE_PATH))
+            .await;
+
+    match conn {
+        Err(e) => {
+            tracing::error!("Failed to establish SQLite connection: {}", e);
+            Vec::new()
+        }
+        Ok(mut connection) => {
+            let query = sqlx::query_as::<_, NovelEntityCardRecord>("SELECT * FROM entity_cards")
+                .fetch_all(&mut connection)
+                .await;
+
+            query
+                .map_err(|e| tracing::error!("Failed to query from SQLite: {}", e))
+                .unwrap_or_default()
+        }
+    }
+}
+
+async fn get_new_records(container_id: &str) -> Vec<NovelEntityCardRecord> {
+    let latest_records = get_latest_entity_card_records()
+        .await
+        .into_iter()
+        .map(|rec| (rec.id, rec))
+        .collect::<HashSet<_>>();
+
+    if let Some(last_records) = ENTITY_CARDS_TRACK_MAP.get(container_id) {
+        let diff = latest_records
+            .difference(&*last_records)
+            .map(|(k, v)| (*k, v.clone()))
+            .collect::<Vec<_>>();
+
+        ENTITY_CARDS_TRACK_MAP.remove(container_id);
+
+        if !diff.is_empty() {
+            diff.into_iter().map(|(_, v)| v).collect()
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    }
 }

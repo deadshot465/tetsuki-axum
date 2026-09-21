@@ -20,7 +20,7 @@ use crate::controller::message_controller::{
     post_chat_completion_record, post_creative_completion_record, post_message_record,
 };
 use crate::controller::novel_controller::{
-    get_summary_container_result, get_summary_result, summarize_codex,
+    get_all_entity_cards, get_summary_container_result, get_summary_result, summarize_codex,
 };
 use crate::controller::roll_controller::{
     get_all_rolls, get_all_user_rolls, get_user_roll_by_id, post_user_roll,
@@ -126,8 +126,13 @@ async fn main() -> anyhow::Result<()> {
             "/novel/summary/{container_id}/result",
             get(get_summary_result),
         )
+        .route("/novel/entity/cards", get(get_all_entity_cards))
         .nest_service("/asset", get_service(ServeDir::new("./asset")))
         .nest_service("/upload", get_service(ServeDir::new("./upload")))
+        .nest_service(
+            "/novel/artifacts",
+            get_service(ServeDir::new("./novel/Artifacts")),
+        )
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(&CONFIGURATION.server_bind_point).await?;

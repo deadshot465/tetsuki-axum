@@ -14,15 +14,18 @@ pub struct CodexSummaryContainerResponse {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
-pub struct CodexSummaryResponse {
-    pub logs: String,
-    pub image: Vec<u8>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, Default)]
 pub struct CodexSummaryResponseLogs {
     pub errors: Vec<String>,
     pub outs: Vec<String>,
     pub console: Vec<String>,
     pub ins: Vec<String>,
+    pub images: Vec<String>
+}
+
+#[derive(sqlx::FromRow, Deserialize, Serialize, Debug, Clone, Default, Eq, PartialEq, Hash)]
+pub struct NovelEntityCardRecord {
+    pub id: i32,
+    pub image_path: String,
+    pub language: String,
+    pub entity_id: i32
 }
