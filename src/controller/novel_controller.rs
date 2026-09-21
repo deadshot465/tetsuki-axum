@@ -60,12 +60,12 @@ pub async fn summarize_codex(
         }),
         volumes: Some(vec![
             "/root/.local/bin/claude:/usr/local/bin/claude".to_string(),
-            "/root/Novel:/app/novel".to_string(),
+            "/root/Novel:/root/Novel".to_string(),
             "/root/.claude:/root/.claude".to_string(),
         ]),
         entrypoint: Some(vec!["claude".to_string(), "-p".to_string()]),
         cmd: Some(vec![prompt]),
-        working_dir: Some("/root/novel".into()),
+        working_dir: Some("/root/Novel".into()),
         ..Default::default()
     };
 
