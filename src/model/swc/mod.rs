@@ -72,6 +72,11 @@ pub enum DungeonType {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(tag = "type")]
 pub enum LinePushMessage {
-    DungeonNotification { dungeon_type: DungeonType },
-    NovelCodexSummaryImages { image_paths: Vec<String> }
+    DungeonNotification {
+        dungeon_type: DungeonType,
+    },
+    NovelCodexSummary {
+        summary: String,
+        image_paths: Vec<String>,
+    },
 }

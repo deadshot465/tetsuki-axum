@@ -255,7 +255,7 @@ pub async fn get_summary_result(
                 .collect::<Vec<_>>();
 
             response.images.extend_from_slice(&new_records);
-            publish_images(new_records).await;
+            publish_summary(response.outs.join("\n"), new_records).await;
 
             (StatusCode::OK, Json(response)).into_response()
         }
@@ -320,8 +320,9 @@ async fn get_new_records(container_id: &str) -> Vec<NovelEntityCardRecord> {
     }
 }
 
-async fn publish_images(new_records: Vec<String>) {
-    let payload = LinePushMessage::NovelCodexSummaryImages {
+async fn publish_summary(summary: String, new_records: Vec<String>) {
+    let payload = LinePushMessage::NovelCodexSummary {
+        summary,
         image_paths: new_records,
     };
 
