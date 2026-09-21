@@ -69,8 +69,9 @@ pub enum DungeonType {
     SlimePhaseTwo,
 }
 
-#[derive(Deserialize, Serialize, Debug, Copy, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(tag = "type")]
-pub enum SwcPushMessage {
+pub enum LinePushMessage {
     DungeonNotification { dungeon_type: DungeonType },
+    NovelCodexSummaryImages { image_paths: Vec<String> }
 }

@@ -5,6 +5,8 @@ use crate::model::novel::{
     CodexSummaryContainerResponse, CodexSummaryRequest, CodexSummaryResponseLogs,
     NovelEntityCardRecord,
 };
+use crate::model::swc::LinePushMessage;
+use crate::shared::HTTP_CLIENT;
 use crate::shared::configuration::CONFIGURATION;
 use crate::shared::constants::NOVEL_ABSOULTE_PATH;
 use axum::Json;
@@ -23,7 +25,7 @@ use sqlx::{Connection, SqliteConnection};
 use std::collections::{HashMap, HashSet};
 
 static ENTITY_CARDS_TRACK_MAP: Lazy<DashMap<String, HashSet<(i32, NovelEntityCardRecord)>>> =
-    Lazy::new(|| DashMap::new());
+    Lazy::new(DashMap::new);
 
 pub async fn summarize_codex(
     _claim: Claim,
@@ -246,13 +248,14 @@ pub async fn get_summary_result(
                 }
             }
 
-            let mut latest_records = get_new_records(&container_id)
+            let new_records = get_new_records(&container_id)
                 .await
                 .into_iter()
                 .map(|rec| rec.image_path)
                 .collect::<Vec<_>>();
 
-            response.images.append(&mut latest_records);
+            response.images.extend_from_slice(&new_records);
+            publish_images(new_records).await;
 
             (StatusCode::OK, Json(response)).into_response()
         }
@@ -273,8 +276,7 @@ fn connect_to_docker_socket() -> Option<Docker> {
 
 async fn get_latest_entity_card_records() -> Vec<NovelEntityCardRecord> {
     let conn =
-        SqliteConnection::connect(&format!("sqlite:///{}/novel.sqlite", &NOVEL_ABSOULTE_PATH))
-            .await;
+        SqliteConnection::connect(&format!("sqlite:///{}/novel.sqlite", NOVEL_ABSOULTE_PATH)).await;
 
     match conn {
         Err(e) => {
@@ -315,5 +317,20 @@ async fn get_new_records(container_id: &str) -> Vec<NovelEntityCardRecord> {
         }
     } else {
         Vec::new()
+    }
+}
+
+async fn publish_images(new_records: Vec<String>) {
+    let payload = LinePushMessage::NovelCodexSummaryImages {
+        image_paths: new_records,
+    };
+
+    if let Err(e) = HTTP_CLIENT
+        .post(&CONFIGURATION.neo_ellia_publication_endpoint)
+        .json(&payload)
+        .send()
+        .await
+    {
+        tracing::error!("Failed to publish novel codex summary images: {}", e);
     }
 }

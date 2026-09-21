@@ -32,6 +32,7 @@ fn initialize() -> anyhow::Result<Configuration> {
             docker_network_name: std::env::var("DOCKER_NETWORK_NAME")?,
             swc_publication_endpoints: vec![],
             swc_check_interval: 3,
+            neo_ellia_publication_endpoint: std::env::var("NEO_ELLIA_PUBLICATION_ENDPOINT")?
         };
         let serialized_toml = toml::to_string_pretty(&configuration)?;
         std::fs::write(&configuration_path, serialized_toml)?;

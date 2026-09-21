@@ -4,7 +4,7 @@ use std::ops::{Add, Sub};
 use time::OffsetDateTime;
 use time::Weekday::{Friday, Thursday};
 
-use crate::model::swc::{DungeonType, SwcPushMessage};
+use crate::model::swc::{DungeonType, LinePushMessage};
 use crate::shared::HTTP_CLIENT;
 use crate::shared::configuration::CONFIGURATION;
 
@@ -89,7 +89,7 @@ async fn schedule_two_step_notification(
 }
 
 async fn publish_notification(dungeon_type: DungeonType) {
-    let payload = SwcPushMessage::DungeonNotification { dungeon_type };
+    let payload = LinePushMessage::DungeonNotification { dungeon_type };
 
     for endpoint in CONFIGURATION.swc_publication_endpoints.iter() {
         if let Err(e) = HTTP_CLIENT.post(endpoint).json(&payload).send().await {

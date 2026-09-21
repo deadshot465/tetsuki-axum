@@ -18,4 +18,5 @@ pub struct Configuration {
     pub docker_network_name: String,
     pub swc_publication_endpoints: Vec<String>,
     pub swc_check_interval: i32,
+    pub neo_ellia_publication_endpoint: String
 }
