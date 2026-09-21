@@ -302,22 +302,23 @@ async fn get_new_records(container_id: &str) -> Vec<NovelEntityCardRecord> {
         .map(|rec| (rec.id, rec))
         .collect::<HashSet<_>>();
 
+    let mut records = Vec::with_capacity(latest_records.len());
+
     if let Some(last_records) = ENTITY_CARDS_TRACK_MAP.get(container_id) {
         let diff = latest_records
             .difference(&*last_records)
             .map(|(k, v)| (*k, v.clone()))
             .collect::<Vec<_>>();
 
-        ENTITY_CARDS_TRACK_MAP.remove(container_id);
-
         if !diff.is_empty() {
-            diff.into_iter().map(|(_, v)| v).collect()
-        } else {
-            Vec::new()
+            let mut diff = diff.into_iter().map(|(_, v)| v).collect();
+            records.append(&mut diff);
         }
-    } else {
-        Vec::new()
     }
+
+    ENTITY_CARDS_TRACK_MAP.remove(container_id);
+
+    records
 }
 
 async fn publish_summary(summary: String, new_records: Vec<String>) {
