@@ -29,6 +29,7 @@ fn initialize() -> anyhow::Result<Configuration> {
             cosmos_db_primary_key: std::env::var("COSMOS_DB_PRIMARY_KEY")?,
             cosmos_db_database_name: std::env::var("COSMOS_DB_DATABASE_NAME")?,
             cosmos_db_account: std::env::var("COSMOS_DB_ACCOUNT")?,
+            docker_network_name: std::env::var("DOCKER_NETWORK_NAME")?,
             swc_publication_endpoints: vec![],
             swc_check_interval: 3,
         };

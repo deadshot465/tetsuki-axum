@@ -1,6 +1,6 @@
 [package]
 name = "tetsuki-axum"
-version = "3.1.1"
+version = "3.1.2"
 authors = ["Chehui Chou <deadshot465@gmail.com>"]
 edition = "2024"
 
@@ -12,6 +12,7 @@ axum = { version = "0.8.9", features = ["macros"] }
 axum-extra = { version = "0.12.6", features = ["typed-header"] }
 azure_core = "1.1.0"
 azure_data_cosmos = { version = "0.38.0", features = ["key_auth"] }
+bollard = { version = "0.21.1", features = ["time", "json_data_content"] }
 dashmap = "6.0.1"
 dotenv = "~0.15.0"
 futures = "~0.3.34"
@@ -21,7 +22,7 @@ rand = "~0.10.2"
 reqwest = { version = "0.13.5", features = ["json"] }
 serde = "~1.0.229"
 serde_json = "~1.0.151"
-sqlx = { version = "0.9.0", features = ["postgres", "runtime-tokio", "json", "tls-rustls"] }
+sqlx = { version = "0.9.0", features = ["postgres", "runtime-tokio", "json", "tls-rustls", "sqlite"] }
 thirtyfour = "0.37.5"
 time = { version = "~0.3.11", features = ["serde", "serde-well-known"] }
 tokio = { version = "1.53.1", features = ["full", "process"] }
