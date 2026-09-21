@@ -1,8 +1,8 @@
 use crate::model::dialog_info::DialogInfo;
 use crate::shared::configuration::CONFIGURATION;
 use once_cell::sync::OnceCell;
-use thirtyfour::prelude::*;
 use thirtyfour::ChromeCapabilities;
+use thirtyfour::prelude::*;
 
 static CAPABILITIES: OnceCell<ChromeCapabilities> = OnceCell::new();
 static WEB_DRIVER: OnceCell<WebDriver> = OnceCell::new();

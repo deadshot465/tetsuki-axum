@@ -5,8 +5,8 @@ use time::OffsetDateTime;
 use time::Weekday::{Friday, Thursday};
 
 use crate::model::swc::{DungeonType, SwcPushMessage};
-use crate::shared::configuration::CONFIGURATION;
 use crate::shared::HTTP_CLIENT;
+use crate::shared::configuration::CONFIGURATION;
 
 pub async fn initialize_tartarus_notification() {
     let now = OffsetDateTime::now_utc();

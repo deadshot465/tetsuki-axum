@@ -32,70 +32,64 @@ pub async fn summarize_codex(
         args.push(instructions.clone());
     }
 
-    let result = tokio::spawn(async move {
-        Command::new("claude")
-            .args(args)
-            .current_dir(format!("./{}", NOVEL_DIRECTORY))
-            .spawn()
-            .map_err(|e| tracing::error!("Failed to start child process: {}", e))
-            .expect("Failed to start child process.")
-            .wait_with_output()
-            .await
-    })
-    .await;
+    let result = Command::new("claude")
+        .args(args)
+        .current_dir(format!("./{}", NOVEL_DIRECTORY))
+        .output()
+        .await;
 
-    if let Ok(output) = result
-        .map_err(|e| tracing::error!("Error happened when joining the child process: {}", e))
-        .and_then(|r| r.map_err(|e| tracing::error!("Failed to get output: {}", e)))
-    {
-        if !output.status.success() {
-            let code = output.status.code();
-            if let Ok(error_message) = String::from_utf8(output.stderr) {
-                let formatted_error_message = format!(
-                    "Failed to get output from LLM: {}, Exit Code: {:?}",
-                    error_message, code
-                );
-                tracing::error!("{}", &formatted_error_message);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ServerError::with_message(formatted_error_message)),
-                )
-                    .into_response()
+    match result {
+        Err(e) => {
+            let error_message = format!("Failed to get output from Claude: {}", e);
+            tracing::error!("{}", &error_message);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ServerError::with_message(error_message)),
+            )
+                .into_response()
+        }
+        Ok(output) => {
+            if !output.status.success() {
+                let code = output.status.code();
+                if let Ok(error_message) = String::from_utf8(output.stderr) {
+                    let formatted_error_message = format!(
+                        "Failed to get output from LLM: {}, Exit Code: {:?}",
+                        error_message, code
+                    );
+                    tracing::error!("{}", &formatted_error_message);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ServerError::with_message(formatted_error_message)),
+                    )
+                        .into_response()
+                } else {
+                    let error_message = format!("Exit code: {:?}", code);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ServerError::with_message(error_message)),
+                    )
+                        .into_response()
+                }
             } else {
-                let error_message = format!("Exit code: {:?}", code);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ServerError::with_message(error_message)),
-                )
-                    .into_response()
-            }
-        } else {
-            if let Ok(output_message) = String::from_utf8(output.stdout) {
-                (
-                    StatusCode::CREATED,
-                    Json(CodexSummaryResponse {
-                        output: output_message,
-                        image: Vec::new(),
-                    }),
-                )
-                    .into_response()
-            } else {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ServerError::with_message(
-                        "Claude invocation succeeded but encountered an error.".to_string(),
-                    )),
-                )
-                    .into_response()
+                if let Ok(output_message) = String::from_utf8(output.stdout) {
+                    (
+                        StatusCode::CREATED,
+                        Json(CodexSummaryResponse {
+                            output: output_message,
+                            image: Vec::new(),
+                        }),
+                    )
+                        .into_response()
+                } else {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ServerError::with_message(
+                            "Claude invocation succeeded but encountered an error.".to_string(),
+                        )),
+                    )
+                        .into_response()
+                }
             }
         }
-    } else {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ServerError::with_message(
-                "Failed to invoke Claude for codex summary.",
-            )),
-        )
-            .into_response()
     }
 }

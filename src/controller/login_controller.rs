@@ -1,13 +1,13 @@
 use crate::model::claim::Claim;
 use crate::model::login_info::{LoginCredential, LoginResponse};
 use crate::shared::configuration::CONFIGURATION;
+use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
-use jsonwebtoken::{encode, EncodingKey, Header};
+use jsonwebtoken::{EncodingKey, Header, encode};
 use std::ops::Add;
-use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 
 pub async fn login(Json(login_credential): Json<LoginCredential>) -> Response {
     let user_name = &CONFIGURATION.bot_user_name;

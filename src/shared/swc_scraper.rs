@@ -1,6 +1,6 @@
 use crate::model::swc::{LocalizedCoupon, LocalizedResource, Payload};
-use crate::shared::configuration::CONFIGURATION;
 use crate::shared::HTTP_CLIENT;
+use crate::shared::configuration::CONFIGURATION;
 use once_cell::sync::OnceCell;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
