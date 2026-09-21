@@ -53,7 +53,7 @@ pub async fn summarize_codex(
     let docker = docker.expect("Failed to connect to docker.");
 
     let config = ContainerCreateBody {
-        image: Some("ubuntu:latest".into()),
+        image: Some("novel:latest".into()),
         host_config: Some(HostConfig {
             network_mode: Some(CONFIGURATION.docker_network_name.clone()),
             binds: Some(vec![
