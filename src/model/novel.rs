@@ -1,3 +1,5 @@
+use std::{collections::HashSet, fmt::Display};
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
@@ -6,6 +8,9 @@ pub struct CodexSummaryRequest {
     pub word_count: i32,
     pub novel: Option<String>,
     pub additional_instructions: Option<String>,
+    pub request_language: CodexSummaryRequestedLanguage,
+    pub push_to_line: bool,
+    pub schedule_polling: bool
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
@@ -28,4 +33,32 @@ pub struct NovelEntityCardRecord {
     pub image_path: String,
     pub language: String,
     pub entity_id: i32
+}
+
+#[derive(Deserialize, Serialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum CodexSummaryRequestedLanguage {
+    #[default]
+    ZhTw,
+    JaJp,
+    EnUs
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, Default, Eq, PartialEq)]
+pub struct CodexSummaryTrackItem {
+    pub container_id: String,
+    pub keyword: String,
+    pub card_records: HashSet<(i32, NovelEntityCardRecord)>,
+    pub requested_language: CodexSummaryRequestedLanguage,
+    pub push_to_line: bool
+}
+
+impl Display for CodexSummaryRequestedLanguage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CodexSummaryRequestedLanguage::ZhTw => write!(f, "zh_tw"),
+            CodexSummaryRequestedLanguage::JaJp => write!(f, "ja_jp"),
+            CodexSummaryRequestedLanguage::EnUs => write!(f, "en_us"),
+        }
+    }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "tetsuki-axum"
-version = "3.2.1"
+version = "3.2.2"
 authors = ["Chehui Chou <deadshot465@gmail.com>"]
 edition = "2024"
 
@@ -13,6 +13,7 @@ axum-extra = { version = "0.12.6", features = ["typed-header"] }
 azure_core = "1.1.0"
 azure_data_cosmos = { version = "0.38.0", features = ["key_auth"] }
 bollard = { version = "0.21.1", features = ["time", "json_data_content"] }
+convert_case = "0.12.0"
 dashmap = "6.0.1"
 dotenv = "~0.15.0"
 futures = "~0.3.34"

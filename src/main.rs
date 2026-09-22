@@ -20,7 +20,7 @@ use crate::controller::message_controller::{
     post_chat_completion_record, post_creative_completion_record, post_message_record,
 };
 use crate::controller::novel_controller::{
-    get_all_entity_cards, get_summary_container_result, get_summary_result, summarize_codex,
+    get_all_entity_cards, get_summary_container_status, get_summary_result, summarize_codex,
 };
 use crate::controller::roll_controller::{
     get_all_rolls, get_all_user_rolls, get_user_roll_by_id, post_user_roll,
@@ -120,7 +120,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/novel/summary", post(summarize_codex))
         .route(
             "/novel/summary/{container_id}",
-            get(get_summary_container_result),
+            get(get_summary_container_status),
         )
         .route(
             "/novel/summary/{container_id}/result",
