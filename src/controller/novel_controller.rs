@@ -307,7 +307,7 @@ async fn get_summary(container_id: String) -> anyhow::Result<CodexSummaryRespons
                 let push_to_line = track_item.push_to_line;
 
                 if push_to_line {
-                    publish_summary(response.outs.join("\n"), new_records).await;
+                    publish_summary(response.outs.join("\n"), response.images.clone()).await;
                 }
             }
 
