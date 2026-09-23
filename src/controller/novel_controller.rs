@@ -390,6 +390,8 @@ async fn publish_summary(summary: String, new_records: Vec<String>) {
 async fn search_record_image_path(container_id: &str) -> Option<String> {
     let latest_records = get_latest_entity_card_records().await;
 
+    tracing::warn!("Length of latest records: {}", latest_records.len());
+
     let track_item = if let Some(item) = ENTITY_CARDS_TRACK_MAP.get(container_id) {
         item.clone()
     } else {
@@ -401,6 +403,8 @@ async fn search_record_image_path(container_id: &str) -> Option<String> {
         .filter(|rec| rec.language == track_item.requested_language.to_string().as_str())
         .collect::<Vec<_>>();
 
+    tracing::warn!("Length of filtered latest records: {}", latest_records.len());
+
     let keyword = track_item.keyword.as_str();
     let mut possible_cases = vec![
         ccase!(title -> kebab, keyword),
@@ -411,6 +415,9 @@ async fn search_record_image_path(container_id: &str) -> Option<String> {
         ccase!(title -> camel, keyword),
     ];
 
+    tracing::warn!("Keyword: {}", keyword);
+    tracing::warn!("Possible cases: {:?}", &possible_cases);
+
     let split_keywords = keyword
         .split(" ")
         .map(|s| s.to_string())
@@ -418,12 +425,16 @@ async fn search_record_image_path(container_id: &str) -> Option<String> {
 
     possible_cases.extend_from_slice(&split_keywords);
 
+    tracing::warn!("Added split keywords: {:?}", &possible_cases);
+
     let lowercase_keywords = split_keywords
         .into_iter()
         .map(|s| s.to_lowercase())
         .collect::<Vec<_>>();
 
     possible_cases.extend_from_slice(&lowercase_keywords);
+
+    tracing::warn!("Final possible cases: {:?}", &possible_cases);
 
     for case in possible_cases.into_iter() {
         let found = latest_records
