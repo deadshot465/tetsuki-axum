@@ -403,7 +403,10 @@ async fn search_record_image_path(container_id: &str) -> Option<String> {
         .filter(|rec| rec.language == track_item.requested_language.to_string().as_str())
         .collect::<Vec<_>>();
 
-    tracing::warn!("Length of filtered latest records: {}", latest_records.len());
+    tracing::warn!(
+        "Length of filtered latest records: {}",
+        latest_records.len()
+    );
 
     let keyword = track_item.keyword.as_str();
     let mut possible_cases = vec![
@@ -433,6 +436,8 @@ async fn search_record_image_path(container_id: &str) -> Option<String> {
         .collect::<Vec<_>>();
 
     possible_cases.extend_from_slice(&lowercase_keywords);
+    possible_cases.sort_unstable();
+    possible_cases.dedup();
 
     tracing::warn!("Final possible cases: {:?}", &possible_cases);
 
