@@ -428,6 +428,13 @@ async fn search_record_image_path(container_id: &str) -> Option<String> {
 
     possible_cases.extend_from_slice(&split_keywords);
 
+    let split_by_quotation_mark_words = keyword
+        .split("'")
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
+
+    possible_cases.extend_from_slice(&split_by_quotation_mark_words);
+
     tracing::warn!("Added split keywords: {:?}", &possible_cases);
 
     let lowercase_keywords = split_keywords
