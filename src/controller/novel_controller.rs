@@ -421,41 +421,56 @@ async fn inner_search_record_image_path(
     );
 
     let mut possible_cases = vec![
-        ccase!(title -> kebab, keyword),
-        ccase!(title -> snake, keyword),
-        ccase!(title -> train, keyword),
-        ccase!(title -> ada, keyword),
-        ccase!(title -> pascal, keyword),
-        ccase!(title -> camel, keyword),
+        (1, ccase!(title -> kebab, keyword)),
+        (2, ccase!(title -> snake, keyword)),
+        (3, ccase!(title -> train, keyword)),
+        (4, ccase!(title -> ada, keyword)),
+        (5, ccase!(title -> pascal, keyword)),
+        (6, ccase!(title -> camel, keyword)),
     ];
 
     tracing::warn!("Keyword: {}", keyword);
     tracing::warn!("Possible cases: {:?}", &possible_cases);
 
+    let mut offset = 6;
+
     let split_keywords = keyword
         .split(" ")
-        .map(|s| s.to_string())
+        .enumerate()
+        .map(|(i, s)| (i + 1 + offset, s.to_string()))
         .collect::<Vec<_>>();
 
+    offset += split_keywords.len();
     possible_cases.extend_from_slice(&split_keywords);
 
     let split_by_quotation_mark_words = keyword
         .split("'")
-        .map(|s| s.to_string())
+        .enumerate()
+        .map(|(i, s)| (i + 1 + offset, s.to_string()))
         .collect::<Vec<_>>();
 
+    offset += split_by_quotation_mark_words.len();
     possible_cases.extend_from_slice(&split_by_quotation_mark_words);
 
     tracing::warn!("Added split keywords: {:?}", &possible_cases);
 
     let lowercase_keywords = split_keywords
         .into_iter()
-        .map(|s| s.to_lowercase())
+        .enumerate()
+        .map(|(i, (_, s))| (i + 1 + offset, s.to_lowercase()))
         .collect::<Vec<_>>();
 
     possible_cases.extend_from_slice(&lowercase_keywords);
-    possible_cases.sort_unstable();
-    possible_cases.dedup();
+    possible_cases.sort_unstable_by(|a, b| a.1.cmp(&b.1));
+    possible_cases.dedup_by(|a, b| a.1.eq(&b.1));
+    possible_cases.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+
+    tracing::warn!("Deduplicated possible cases: {:?}", &possible_cases);
+
+    let possible_cases = possible_cases
+        .into_iter()
+        .map(|(_, s)| s)
+        .collect::<Vec<_>>();
 
     tracing::warn!("Final possible cases: {:?}", &possible_cases);
 
