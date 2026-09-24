@@ -2,8 +2,8 @@ use crate::model::app_state::AppState;
 use crate::model::claim::Claim;
 use crate::model::errors::ServerError;
 use crate::model::novel::{
-    CodexSummaryContainerResponse, CodexSummaryRequest, CodexSummaryResponseLogs,
-    CodexSummaryTrackItem, NovelEntityCardRecord,
+    CodexSummaryContainerResponse, CodexSummaryRequest, CodexSummaryRequestedLanguage,
+    CodexSummaryResponseLogs, CodexSummaryTrackItem, NovelEntityCardRecord,
 };
 use crate::model::swc::LinePushMessage;
 use crate::shared::HTTP_CLIENT;
@@ -23,17 +23,23 @@ use convert_case::ccase;
 use dashmap::DashMap;
 use futures::StreamExt;
 use once_cell::sync::Lazy;
+use redis::AsyncTypedCommands;
 use sqlx::{Connection, SqliteConnection};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 use tokio::time::{interval, sleep};
 
 static ENTITY_CARDS_TRACK_MAP: Lazy<DashMap<String, CodexSummaryTrackItem>> =
     Lazy::new(DashMap::new);
 
+const SEVEN_DAYS_SECONDS: f32 = (7 * 24 * 60 * 60) as f32;
+
 pub async fn summarize_codex(
     _claim: Claim,
-    State(_): State<AppState>,
+    State(app_state): State<AppState>,
     Json(payload): Json<CodexSummaryRequest>,
 ) -> Response {
     let mut prompt = format!(
@@ -50,6 +56,32 @@ pub async fn summarize_codex(
     if let Some(ref instructions) = payload.additional_instructions {
         prompt.push(' ');
         prompt.push_str(instructions);
+    }
+
+    let now = OffsetDateTime::now_utc();
+    let (redis_key, cached_time_key) =
+        make_redis_keys(&payload.keyword, &payload.request_language.to_string());
+    if let Ok(cache_result) =
+        get_cached_entry(app_state.redis_client.clone(), &cached_time_key).await
+        && let Some(cached_time) = cache_result
+        && let Ok(parsed_time) = OffsetDateTime::parse(&cached_time, &Rfc3339)
+        && let elapsed = (now - parsed_time).as_seconds_f32()
+        && elapsed < SEVEN_DAYS_SECONDS
+    {
+        tracing::warn!("Found cache. Retrieving cache for {}...", &redis_key);
+
+        if let Ok(cached_entry) = get_cached_entry(app_state.redis_client.clone(), &redis_key).await
+            && let Some(entry) = cached_entry
+            && let Ok(mut logs) = serde_json::from_str::<CodexSummaryResponseLogs>(&entry)
+        {
+            if let Some(found_image) =
+                inner_search_record_image_path(&payload.keyword, payload.request_language).await
+            {
+                logs.images.push(found_image);
+            }
+
+            return (StatusCode::OK, Json(logs)).into_response();
+        }
     }
 
     let docker = connect_to_docker_socket();
@@ -120,16 +152,9 @@ pub async fn summarize_codex(
                 )
                     .into_response()
             } else {
-                let current_records = get_latest_entity_card_records()
-                    .await
-                    .into_iter()
-                    .map(|rec| (rec.id, rec))
-                    .collect::<HashSet<_>>();
-
                 let track_item = CodexSummaryTrackItem {
                     container_id: container_id.to_string(),
                     keyword: payload.keyword,
-                    card_records: current_records,
                     requested_language: payload.request_language,
                     push_to_line: payload.push_to_line,
                 };
@@ -138,7 +163,7 @@ pub async fn summarize_codex(
 
                 if payload.schedule_polling {
                     tokio::spawn(async move {
-                        schedule_auto_polling(track_item).await;
+                        schedule_auto_polling(track_item, app_state).await;
                     });
                 }
 
@@ -178,9 +203,9 @@ pub async fn get_summary_container_status(
 pub async fn get_summary_result(
     _claim: Claim,
     Path(container_id): Path<String>,
-    State(_): State<AppState>,
+    State(app_state): State<AppState>,
 ) -> Response {
-    match get_summary(container_id).await {
+    match get_summary(container_id, app_state).await {
         Err(e) => {
             let error_message = format!("{}", e);
             tracing::error!("{}", &error_message);
@@ -218,7 +243,10 @@ async fn get_container_status(container_id: String) -> anyhow::Result<Option<Con
     }
 }
 
-async fn get_summary(container_id: String) -> anyhow::Result<CodexSummaryResponseLogs> {
+async fn get_summary(
+    container_id: String,
+    app_state: AppState,
+) -> anyhow::Result<CodexSummaryResponseLogs> {
     if let Some(state) = get_container_status(container_id.clone()).await?
         && let Some(status) = state.status
         && status != ContainerStateStatusEnum::EXITED
@@ -296,6 +324,20 @@ async fn get_summary(container_id: String) -> anyhow::Result<CodexSummaryRespons
             if let Some(track_item) = ENTITY_CARDS_TRACK_MAP.get(&container_id) {
                 let push_to_line = track_item.push_to_line;
 
+                let (redis_key, cached_time_key) = make_redis_keys(
+                    &track_item.keyword,
+                    &track_item.requested_language.to_string(),
+                );
+
+                set_cached_entry(
+                    app_state.redis_client.clone(),
+                    redis_key,
+                    serde_json::to_string(&response)?,
+                    cached_time_key,
+                    OffsetDateTime::now_utc().format(&Rfc3339)?,
+                )
+                .await?;
+
                 if push_to_line {
                     publish_summary(response.outs.join("\n"), response.images.clone()).await;
                 }
@@ -352,19 +394,26 @@ async fn publish_summary(summary: String, new_records: Vec<String>) {
 }
 
 async fn search_record_image_path(container_id: &str) -> Option<String> {
-    let latest_records = get_latest_entity_card_records().await;
-
-    tracing::warn!("Length of latest records: {}", latest_records.len());
-
     let track_item = if let Some(item) = ENTITY_CARDS_TRACK_MAP.get(container_id) {
         item.clone()
     } else {
         CodexSummaryTrackItem::default()
     };
 
+    inner_search_record_image_path(&track_item.keyword, track_item.requested_language).await
+}
+
+async fn inner_search_record_image_path(
+    keyword: &str,
+    requested_language: CodexSummaryRequestedLanguage,
+) -> Option<String> {
+    let latest_records = get_latest_entity_card_records().await;
+
+    tracing::warn!("Length of latest records: {}", latest_records.len());
+
     let latest_records = latest_records
         .into_iter()
-        .filter(|rec| rec.language == track_item.requested_language.to_string().as_str())
+        .filter(|rec| rec.language == requested_language.to_string().as_str())
         .collect::<Vec<_>>();
 
     tracing::warn!(
@@ -372,7 +421,6 @@ async fn search_record_image_path(container_id: &str) -> Option<String> {
         latest_records.len()
     );
 
-    let keyword = track_item.keyword.as_str();
     let mut possible_cases = vec![
         ccase!(title -> kebab, keyword),
         ccase!(title -> snake, keyword),
@@ -425,7 +473,7 @@ async fn search_record_image_path(container_id: &str) -> Option<String> {
     None
 }
 
-async fn schedule_auto_polling(track_item: CodexSummaryTrackItem) {
+async fn schedule_auto_polling(track_item: CodexSummaryTrackItem, app_state: AppState) {
     let sleep = sleep(Duration::from_mins(10));
     let mut timeout = std::pin::pin!(sleep);
 
@@ -458,8 +506,41 @@ async fn schedule_auto_polling(track_item: CodexSummaryTrackItem) {
         }
     }
 
-    if exited && let Err(e) = get_summary(track_item.container_id.clone()).await {
+    if exited && let Err(e) = get_summary(track_item.container_id.clone(), app_state).await {
         let error_message = format!("{}", e);
         tracing::error!("{}", &error_message);
     }
+}
+
+fn make_redis_keys(keyword: &str, language: &str) -> (String, String) {
+    (
+        format!("{}_{}", keyword.to_lowercase(), language),
+        format!("{}_{}_cached_time", keyword.to_lowercase(), language),
+    )
+}
+
+async fn get_cached_entry(
+    redis_client: Arc<redis::Client>,
+    key: &str,
+) -> anyhow::Result<Option<String>> {
+    let mut conn = redis_client.get_multiplexed_async_connection().await?;
+
+    let value = conn.get(key).await?;
+
+    Ok(value)
+}
+
+async fn set_cached_entry(
+    redis_client: Arc<redis::Client>,
+    key: String,
+    value: String,
+    cached_time_key: String,
+    cached_time_value: String,
+) -> anyhow::Result<()> {
+    let mut conn = redis_client.get_multiplexed_async_connection().await?;
+
+    conn.set(key, value).await?;
+    conn.set(cached_time_key, cached_time_value).await?;
+
+    Ok(())
 }

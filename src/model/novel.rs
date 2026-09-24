@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fmt::Display};
+use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
@@ -10,7 +10,7 @@ pub struct CodexSummaryRequest {
     pub additional_instructions: Option<String>,
     pub request_language: CodexSummaryRequestedLanguage,
     pub push_to_line: bool,
-    pub schedule_polling: bool
+    pub schedule_polling: bool,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
@@ -24,7 +24,7 @@ pub struct CodexSummaryResponseLogs {
     pub outs: Vec<String>,
     pub console: Vec<String>,
     pub ins: Vec<String>,
-    pub images: Vec<String>
+    pub images: Vec<String>,
 }
 
 #[derive(sqlx::FromRow, Deserialize, Serialize, Debug, Clone, Default, Eq, PartialEq, Hash)]
@@ -32,7 +32,7 @@ pub struct NovelEntityCardRecord {
     pub id: i32,
     pub image_path: String,
     pub language: String,
-    pub entity_id: i32
+    pub entity_id: i32,
 }
 
 #[derive(Deserialize, Serialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -41,16 +41,15 @@ pub enum CodexSummaryRequestedLanguage {
     #[default]
     ZhTw,
     JaJp,
-    EnUs
+    EnUs,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, Default, Eq, PartialEq)]
 pub struct CodexSummaryTrackItem {
     pub container_id: String,
     pub keyword: String,
-    pub card_records: HashSet<(i32, NovelEntityCardRecord)>,
     pub requested_language: CodexSummaryRequestedLanguage,
-    pub push_to_line: bool
+    pub push_to_line: bool,
 }
 
 impl Display for CodexSummaryRequestedLanguage {

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::Router;
 use axum::routing::{get, get_service, patch, post};
 use tower_http::services::ServeDir;
@@ -70,9 +72,7 @@ async fn main() -> anyhow::Result<()> {
         initialize_tartarus_notification().await;
     });
 
-    let redis_client = redis::Client::open("redis://redis");
-
-    tracing::warn!("Redis client initialization result: {:?}", &redis_client);
+    let redis_client = redis::Client::open("redis://redis").map(Arc::new);
 
     let state = AppState {
         cosmos_db: initialize_clients().await?,

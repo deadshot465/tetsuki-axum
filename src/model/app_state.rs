@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 use crate::model::cosmos_db::CosmosDb;
 
 #[derive(Clone)]
 pub struct AppState {
     pub cosmos_db: CosmosDb,
-    pub redis_client: redis::Client
+    pub redis_client: Arc<redis::Client>
 }
