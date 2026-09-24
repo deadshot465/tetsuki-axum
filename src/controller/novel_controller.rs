@@ -290,27 +290,39 @@ async fn get_summary(
                 match p {
                     LogOutput::StdErr { message } => {
                         let bytes = message.into_iter().collect::<Vec<_>>();
-                        response
-                            .errors
-                            .push(String::from_utf8(bytes).unwrap_or_default());
+                        response.errors.push(
+                            String::from_utf8(bytes)
+                                .unwrap_or_default()
+                                .trim()
+                                .to_string(),
+                        );
                     }
                     LogOutput::StdOut { message } => {
                         let bytes = message.into_iter().collect::<Vec<_>>();
-                        response
-                            .outs
-                            .push(String::from_utf8(bytes).unwrap_or_default());
+                        response.outs.push(
+                            String::from_utf8(bytes)
+                                .unwrap_or_default()
+                                .trim()
+                                .to_string(),
+                        );
                     }
                     LogOutput::StdIn { message } => {
                         let bytes = message.into_iter().collect::<Vec<_>>();
-                        response
-                            .ins
-                            .push(String::from_utf8(bytes).unwrap_or_default());
+                        response.ins.push(
+                            String::from_utf8(bytes)
+                                .unwrap_or_default()
+                                .trim()
+                                .to_string(),
+                        );
                     }
                     LogOutput::Console { message } => {
                         let bytes = message.into_iter().collect::<Vec<_>>();
-                        response
-                            .console
-                            .push(String::from_utf8(bytes).unwrap_or_default());
+                        response.console.push(
+                            String::from_utf8(bytes)
+                                .unwrap_or_default()
+                                .trim()
+                                .to_string(),
+                        );
                     }
                 }
             }
