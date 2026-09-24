@@ -70,8 +70,13 @@ async fn main() -> anyhow::Result<()> {
         initialize_tartarus_notification().await;
     });
 
+    let redis_client = redis::Client::open("redis://redis");
+
+    tracing::warn!("Redis client initialization result: {:?}", &redis_client);
+
     let state = AppState {
         cosmos_db: initialize_clients().await?,
+        redis_client: redis_client?
     };
 
     let app = Router::new()
