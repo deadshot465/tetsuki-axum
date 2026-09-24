@@ -289,18 +289,8 @@ async fn get_summary(container_id: String) -> anyhow::Result<CodexSummaryRespons
                 }
             }
 
-            let new_records = get_new_records(&container_id)
-                .await
-                .into_iter()
-                .map(|rec| rec.image_path)
-                .collect::<Vec<_>>();
-
-            if !new_records.is_empty() {
-                response.images.extend_from_slice(&new_records);
-            } else {
-                if let Some(found_item) = search_record_image_path(&container_id).await {
-                    response.images.push(found_item);
-                }
+            if let Some(found_item) = search_record_image_path(&container_id).await {
+                response.images.push(found_item);
             }
 
             if let Some(track_item) = ENTITY_CARDS_TRACK_MAP.get(&container_id) {
@@ -343,32 +333,6 @@ async fn get_latest_entity_card_records() -> Vec<NovelEntityCardRecord> {
                 .unwrap_or_default()
         }
     }
-}
-
-async fn get_new_records(container_id: &str) -> Vec<NovelEntityCardRecord> {
-    let latest_records = get_latest_entity_card_records()
-        .await
-        .into_iter()
-        .map(|rec| (rec.id, rec))
-        .collect::<HashSet<_>>();
-
-    let mut records = Vec::with_capacity(latest_records.len());
-
-    if let Some(track_item) = ENTITY_CARDS_TRACK_MAP.get(container_id) {
-        let last_records = &track_item.card_records;
-
-        let diff = latest_records
-            .difference(last_records)
-            .map(|(k, v)| (*k, v.clone()))
-            .collect::<Vec<_>>();
-
-        if !diff.is_empty() {
-            let mut diff = diff.into_iter().map(|(_, v)| v).collect();
-            records.append(&mut diff);
-        }
-    }
-
-    records
 }
 
 async fn publish_summary(summary: String, new_records: Vec<String>) {
