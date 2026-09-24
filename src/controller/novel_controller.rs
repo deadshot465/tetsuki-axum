@@ -72,14 +72,8 @@ pub async fn summarize_codex(
 
         if let Ok(cached_entry) = get_cached_entry(app_state.redis_client.clone(), &redis_key).await
             && let Some(entry) = cached_entry
-            && let Ok(mut logs) = serde_json::from_str::<CodexSummaryResponseLogs>(&entry)
+            && let Ok(logs) = serde_json::from_str::<CodexSummaryResponseLogs>(&entry)
         {
-            if let Some(found_image) =
-                inner_search_record_image_path(&payload.keyword, payload.request_language).await
-            {
-                logs.images.push(found_image);
-            }
-
             return (StatusCode::OK, Json(logs)).into_response();
         }
     }
