@@ -48,6 +48,7 @@ pub enum CodexSummaryRequestedLanguage {
 pub struct CodexSummaryTrackItem {
     pub container_id: String,
     pub keyword: String,
+    pub word_count: i32,
     pub requested_language: CodexSummaryRequestedLanguage,
     pub push_to_line: bool,
 }

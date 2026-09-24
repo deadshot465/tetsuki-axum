@@ -59,8 +59,11 @@ pub async fn summarize_codex(
     }
 
     let now = OffsetDateTime::now_utc();
-    let (redis_key, cached_time_key) =
-        make_redis_keys(&payload.keyword, &payload.request_language.to_string());
+    let (redis_key, cached_time_key) = make_redis_keys(
+        &payload.keyword,
+        payload.word_count,
+        &payload.request_language.to_string(),
+    );
     if let Ok(cache_result) =
         get_cached_entry(app_state.redis_client.clone(), &cached_time_key).await
         && let Some(cached_time) = cache_result
@@ -149,6 +152,7 @@ pub async fn summarize_codex(
                 let track_item = CodexSummaryTrackItem {
                     container_id: container_id.to_string(),
                     keyword: payload.keyword,
+                    word_count: payload.word_count,
                     requested_language: payload.request_language,
                     push_to_line: payload.push_to_line,
                 };
@@ -320,6 +324,7 @@ async fn get_summary(
 
                 let (redis_key, cached_time_key) = make_redis_keys(
                     &track_item.keyword,
+                    track_item.word_count,
                     &track_item.requested_language.to_string(),
                 );
 
@@ -506,10 +511,15 @@ async fn schedule_auto_polling(track_item: CodexSummaryTrackItem, app_state: App
     }
 }
 
-fn make_redis_keys(keyword: &str, language: &str) -> (String, String) {
+fn make_redis_keys(keyword: &str, word_count: i32, language: &str) -> (String, String) {
     (
-        format!("{}_{}", keyword.to_lowercase(), language),
-        format!("{}_{}_cached_time", keyword.to_lowercase(), language),
+        format!("{}_{}_{}", keyword.to_lowercase(), word_count, language),
+        format!(
+            "{}_{}_{}_cached_time",
+            keyword.to_lowercase(),
+            word_count,
+            language
+        ),
     )
 }
 
