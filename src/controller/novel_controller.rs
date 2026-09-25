@@ -432,19 +432,113 @@ async fn inner_search_record_image_path(
         latest_records.len()
     );
 
+    tracing::warn!("Keyword: {}", keyword);
+
+    let remove_quotation_marks = keyword.replace("'", "");
+    let requested_language_str = requested_language.to_string();
+
     let mut possible_cases = vec![
-        (1, ccase!(title -> kebab, keyword)),
-        (2, ccase!(title -> snake, keyword)),
-        (3, ccase!(title -> train, keyword)),
-        (4, ccase!(title -> ada, keyword)),
-        (5, ccase!(title -> pascal, keyword)),
-        (6, ccase!(title -> camel, keyword)),
+        (
+            1,
+            format!(
+                "{}_{}",
+                ccase!(title -> kebab, &remove_quotation_marks),
+                &requested_language_str
+            ),
+        ),
+        (
+            2,
+            format!(
+                "{}_{}",
+                ccase!(title -> snake, &remove_quotation_marks),
+                &requested_language_str
+            ),
+        ),
+        (
+            3,
+            format!(
+                "{}_{}",
+                ccase!(title -> train, &remove_quotation_marks),
+                &requested_language_str
+            ),
+        ),
+        (
+            4,
+            format!(
+                "{}_{}",
+                ccase!(title -> ada, &remove_quotation_marks),
+                &requested_language_str
+            ),
+        ),
+        (
+            5,
+            format!(
+                "{}_{}",
+                ccase!(title -> pascal, &remove_quotation_marks),
+                &requested_language_str
+            ),
+        ),
+        (
+            6,
+            format!(
+                "{}_{}",
+                ccase!(title -> camel, &remove_quotation_marks),
+                &requested_language_str
+            ),
+        ),
+        (
+            7,
+            format!(
+                "{}_{}",
+                ccase!(title -> kebab, keyword),
+                &requested_language_str
+            ),
+        ),
+        (
+            8,
+            format!(
+                "{}_{}",
+                ccase!(title -> snake, keyword),
+                &requested_language_str
+            ),
+        ),
+        (
+            9,
+            format!(
+                "{}_{}",
+                ccase!(title -> train, keyword),
+                &requested_language_str
+            ),
+        ),
+        (
+            10,
+            format!(
+                "{}_{}",
+                ccase!(title -> ada, keyword),
+                &requested_language_str
+            ),
+        ),
+        (
+            11,
+            format!(
+                "{}_{}",
+                ccase!(title -> pascal, keyword),
+                &requested_language_str
+            ),
+        ),
+        (
+            12,
+            format!(
+                "{}_{}",
+                ccase!(title -> camel, keyword),
+                &requested_language_str
+            ),
+        ),
     ];
 
-    tracing::warn!("Keyword: {}", keyword);
     tracing::warn!("Possible cases: {:?}", &possible_cases);
 
-    let mut offset = 6;
+    let mut offset = 12;
 
     let split_keywords = keyword
         .split(" ")
